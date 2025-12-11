@@ -775,11 +775,11 @@ void main_loop (void)
 
     // printf("Start sending %d bytes...\r\n", len);
 
-    ble_sts_t r = notify_big_packet(
-                    BLS_CONN_HANDLE,
-                    SPP_CLIENT_TO_SERVER_DP_H,   // 你的 notify 句柄
-                    test_buf,
-                    len);
+    // ble_sts_t r = notify_big_packet(
+    //                 BLS_CONN_HANDLE,
+    //                 SPP_CLIENT_TO_SERVER_DP_H,   // 你的 notify 句柄
+    //                 test_buf,
+    //                 len);
 		}
 
 	}

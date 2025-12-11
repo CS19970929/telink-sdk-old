@@ -398,12 +398,23 @@ static const u8 my_OtaCharVal[19] = {
  * @return     0
  */
 extern bool rev_master ;
+
+#if 0
 int module_onReceiveData(void *para)
 {
 	rf_packet_att_write_t *p = (rf_packet_att_write_t*)para;
 	u8 len = p->l2capLen - 3;
 	if(len > 0)
 	{
+		{
+			spp_event_t *pEvt =  (spp_event_t *)p;
+		pEvt->token = 0xFF;
+		pEvt->paramLen = p->l2capLen + 2;   //l2cap_len + 2 byte (eventId)
+		pEvt->eventId = 0x07a0;  //data received event
+		memcpy(pEvt->param, &p->opcode, len + 3);
+
+		spp_send_data(HCI_FLAG_EVENT_TLK_MODULE, pEvt);
+		}
 		// spp_event_t *pEvt =  (spp_event_t *)p;
 		// pEvt->token = 0xFF;
 		// pEvt->paramLen = p->l2capLen + 2;   //l2cap_len + 2 byte (eventId)
@@ -417,6 +428,49 @@ int module_onReceiveData(void *para)
 	}
 
 	return 0;
+}
+#endif
+
+int module_onReceiveData(void *para)
+{
+    rf_packet_att_write_t *p = (rf_packet_att_write_t*)para;
+
+    // ATT payload = l2capLen - opcode(1) - handle(2)
+    u8 len = p->l2capLen - 3;
+    if (len == 0) {
+        return 0;
+    }
+
+    u8 *rx_data = &p->value;   // Telink ATT 写的实际数据起点
+
+    // 手工分包并 notify 回去 —— 核心部分
+    u16 handle_notify = SPP_SERVER_TO_CLIENT_DP_H;   // 你的 notify handle
+
+    // u16 conn = blc_ll_getCurrentConnHandle();        // 获取当前连接句柄
+    // if (conn == 0xFFFF) {                            // 未连接保护
+    //     return 0;
+    // }
+
+    int remain = len;
+    u8 *ptr = rx_data;
+
+    while (remain > 0) {
+        int send_len = (remain > 20) ? 20 : remain;
+
+        blc_gatt_pushHandleValueNotify(
+            BLS_CONN_HANDLE,
+            SPP_CLIENT_TO_SERVER_DP_H,
+            ptr,
+            send_len
+        );
+
+        ptr += send_len;
+        remain -= send_len;
+    }
+
+    rev_master = true;   // 保留你原来的标记（看起来你项目用这个做状态判断）
+    return 0;
+
 }
 
 
