@@ -431,31 +431,32 @@ int module_onReceiveData(void *para)
 }
 #endif
 
-int module_onReceiveData(void *para)
+u16 modbus_crc16(const u8 *buf, int len)
 {
-    rf_packet_att_write_t *p = (rf_packet_att_write_t*)para;
-
-    // ATT payload = l2capLen - opcode(1) - handle(2)
-    u8 len = p->l2capLen - 3;
-    if (len == 0) {
-        return 0;
+    u16 crc = 0xFFFF;
+    for (int i = 0; i < len; i++) {
+        crc ^= buf[i];
+        for (int j = 0; j < 8; j++) {
+            if (crc & 1)
+                crc = (crc >> 1) ^ 0xA001;
+            else
+                crc >>= 1;
+        }
     }
+    return crc;
+}
 
-    u8 *rx_data = &p->value;   // Telink ATT 写的实际数据起点
 
-    // 手工分包并 notify 回去 —— 核心部分
-    u16 handle_notify = SPP_SERVER_TO_CLIENT_DP_H;   // 你的 notify handle
-
-    // u16 conn = blc_ll_getCurrentConnHandle();        // 获取当前连接句柄
-    // if (conn == 0xFFFF) {                            // 未连接保护
-    //     return 0;
-    // }
+static void ble_send_packet(u8 *data, int len)
+{
+    u16 conn = blc_ll_getCurrentConnHandle();
+    if (conn == 0xFFFF) return;
 
     int remain = len;
-    u8 *ptr = rx_data;
+    u8 *ptr = data;
 
     while (remain > 0) {
-        int send_len = (remain > 20) ? 20 : remain;
+        int send_len = remain > 20 ? 20 : remain;
 
         blc_gatt_pushHandleValueNotify(
             BLS_CONN_HANDLE,
@@ -467,11 +468,138 @@ int module_onReceiveData(void *para)
         ptr += send_len;
         remain -= send_len;
     }
-
-    rev_master = true;   // 保留你原来的标记（看起来你项目用这个做状态判断）
-    return 0;
-
 }
+
+
+int modbus_process(u8 *rx, int len)
+{
+    if (len < 4) return 0;
+
+    // 验证 CRC
+    u16 crc_calc = modbus_crc16(rx, len - 2);
+    u16 crc_recv = rx[len - 2] | (rx[len - 1] << 8);
+    if (crc_calc != crc_recv) {
+        return 0;   // 丢弃错误帧
+    }
+
+    u8 addr = rx[0];
+    u8 func = rx[1];
+
+    // ------------------
+    // 功能码 03：读寄存器
+    // ------------------
+    if (func == 0x03) {
+        u16 reg = (rx[2] << 8) | rx[3];
+        u16 num = (rx[4] << 8) | rx[5];
+
+        // 可根据 reg 查你的 BMS 数据
+        // 我这里给你放一个示例：
+        u8 resp[64];
+        resp[0] = addr;
+        resp[1] = func;
+        resp[2] = num * 2; // 数据长度（字节）
+
+        for(int i=0; i<num; i++){
+            u16 value = fake_read_register(reg + i); // 你自己实现
+            resp[3 + i*2] = value >> 8;
+            resp[4 + i*2] = value & 0xFF;
+        }
+
+        int tx_len = 3 + num*2;
+        u16 crc = modbus_crc16(resp, tx_len);
+        resp[tx_len] = crc & 0xFF;
+        resp[tx_len+1] = crc >> 8;
+
+        ble_send_packet(resp, tx_len+2);
+        return 1;
+    }
+
+    // ------------------
+    // 功能码 10：写寄存器
+    // ------------------
+    if (func == 0x10) {
+        u16 reg = (rx[2] << 8) | rx[3];
+        u16 num = (rx[4] << 8) | rx[5];
+        u8  byte_cnt = rx[6];
+
+        // 写入
+        for (int i = 0; i < num; i++) {
+            u16 value = (rx[7+i*2] << 8) | rx[8+i*2];
+            fake_write_register(reg+i, value);  // 你自己实现
+        }
+
+        // 应答格式：ADDR FUNC REG_H REG_L NUM_H NUM_L CRC_L CRC_H
+        u8 resp[8];
+        memcpy(resp, rx, 6);
+        u16 crc = modbus_crc16(resp, 6);
+        resp[6] = crc & 0xFF;
+        resp[7] = crc >> 8;
+
+        ble_send_packet(resp, 8);
+        return 1;
+    }
+
+    return 0;
+}
+
+
+
+int module_onReceiveData(void *para)
+{
+    rf_packet_att_write_t *p = (rf_packet_att_write_t*)para;
+
+    u8 len = p->l2capLen - 3;
+    if(len == 0) return 0;
+
+    u8 *rx = &p->value;
+
+    // 解析 + 应答
+    modbus_process(rx, len);
+
+    return 0;
+}
+
+// int module_onReceiveData(void *para)
+// {
+//     rf_packet_att_write_t *p = (rf_packet_att_write_t*)para;
+
+//     // ATT payload = l2capLen - opcode(1) - handle(2)
+//     u8 len = p->l2capLen - 3;
+//     if (len == 0) {
+//         return 0;
+//     }
+
+//     u8 *rx_data = &p->value;   // Telink ATT 写的实际数据起点
+
+//     // 手工分包并 notify 回去 —— 核心部分
+//     u16 handle_notify = SPP_SERVER_TO_CLIENT_DP_H;   // 你的 notify handle
+
+//     // u16 conn = blc_ll_getCurrentConnHandle();        // 获取当前连接句柄
+//     // if (conn == 0xFFFF) {                            // 未连接保护
+//     //     return 0;
+//     // }
+
+//     int remain = len;
+//     u8 *ptr = rx_data;
+
+//     while (remain > 0) {
+//         int send_len = (remain > 20) ? 20 : remain;
+
+//         blc_gatt_pushHandleValueNotify(
+//             BLS_CONN_HANDLE,
+//             SPP_CLIENT_TO_SERVER_DP_H,
+//             ptr,
+//             send_len
+//         );
+
+//         ptr += send_len;
+//         remain -= send_len;
+//     }
+
+//     rev_master = true;   // 保留你原来的标记（看起来你项目用这个做状态判断）
+//     return 0;
+
+// }
 
 
 // TM : to modify
