@@ -107,8 +107,27 @@ _attribute_data_retention_	my_fifo_t	blt_txfifo = {
 /**
  * @brief	Adv Packet data
  */
+
+// const u8	tbl_advData[] = {
+// 	 0x05, 0x09, 'h', 'a', 'n', 's', 't', 'a', 'r',
+// 	 0x02, 0x01, 0x05, 							// BLE limited discoverable mode and BR/EDR not supported
+// 	 0x03, 0x19, 0x80, 0x01, 					// 384, Generic Remote Control, Generic category
+// 	 0x05, 0x02, 0x12, 0x18, 0x0F, 0x18,		// incomplete list of service class UUIDs (0x1812, 0x180F)
+// };
+// const u8	tbl_advData[] = {
+// 	 0x05, 0x09, 'V', 'H', 'I', 'D',
+// 	 0x02, 0x01, 0x05, 							// BLE limited discoverable mode and BR/EDR not supported
+// 	 0x03, 0x19, 0x80, 0x01, 					// 384, Generic Remote Control, Generic category
+// 	 0x05, 0x02, 0x12, 0x18, 0x0F, 0x18,		// incomplete list of service class UUIDs (0x1812, 0x180F)
+// };
+// const u8	tbl_advData[] = {
+// 	 0x05, 0x09, 'S', 'T', 'A', 'R',
+// 	 0x02, 0x01, 0x05, 							// BLE limited discoverable mode and BR/EDR not supported
+// 	 0x03, 0x19, 0x80, 0x01, 					// 384, Generic Remote Control, Generic category
+// 	 0x05, 0x02, 0x12, 0x18, 0x0F, 0x18,		// incomplete list of service class UUIDs (0x1812, 0x180F)
+// };
 const u8	tbl_advData[] = {
-	 0x05, 0x09, 'V', 'H', 'I', 'D',
+	 0x05, 0x09, 'B', 'T', 'A', 'R',
 	 0x02, 0x01, 0x05, 							// BLE limited discoverable mode and BR/EDR not supported
 	 0x03, 0x19, 0x80, 0x01, 					// 384, Generic Remote Control, Generic category
 	 0x05, 0x02, 0x12, 0x18, 0x0F, 0x18,		// incomplete list of service class UUIDs (0x1812, 0x180F)
@@ -118,8 +137,11 @@ const u8	tbl_advData[] = {
 /**
  * @brief	Scan Response Packet data
  */
+// const u8	tbl_scanRsp [] = {
+// 		 0x08, 0x09, 'v', 'S', 'a', 'm', 'p', 'l', 'e',
+// 	};
 const u8	tbl_scanRsp [] = {
-		 0x08, 0x09, 'v', 'S', 'a', 'm', 'p', 'l', 'e',
+	 0x08, 0x09, 'B', 'T', 'n', 's', 't', 'a', 'r',
 	};
 
 
@@ -618,6 +640,8 @@ _attribute_ram_code_ void user_init_deepRetn(void)
 #endif
 }
 
+_attribute_data_retention_ u8 notify_data_test[20] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
+bool rev_master = false;
 
 /**
  * @brief     BLE main loop
@@ -645,6 +669,25 @@ void main_loop (void)
 				proc_button(0, 0, 0);  //button triggers pair & unpair  and OTA
 			}
 	#endif
+
+	{
+		// if(device_in_connection_state && clock_time_exceed(interval_update_tick, 1000*1000))
+		if(device_in_connection_state && rev_master)
+		{
+			rev_master = false;
+			ble_sts_t ret;
+			interval_update_tick = clock_time();
+			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_SERVER_TO_CLIENT_DP_H, notify_data_test, 8);
+			ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, 8);
+
+			if(ret == BLE_SUCCESS)
+			{
+				printf("Notify data to master\r\n");
+				array_printf(notify_data_test, 8);
+				notify_data_test[0]++;
+			}
+		}
+	}
 
 
 	////////////////////////////////////// PM Process /////////////////////////////////

@@ -61,6 +61,51 @@ typedef struct
   u16 timeout;
 } gap_periConnectParams_t;
 
+////////////////////// SPP ////////////////////////////////////
+static const u8 TelinkSppServiceUUID[16]	      	    = WRAPPING_BRACES(TELINK_SPP_UUID_SERVICE);
+static const u8 TelinkSppDataServer2ClientUUID[16]      = WRAPPING_BRACES(TELINK_SPP_DATA_SERVER2CLIENT);
+static const u8 TelinkSppDataClient2ServerUUID[16]      = WRAPPING_BRACES(TELINK_SPP_DATA_CLIENT2SERVER);
+
+// Spp data from Server to Client characteristic variables
+static u8 SppDataServer2ClientDataCCC[2]  				= {0};
+//this array will not used for sending data(directly calling HandleValueNotify API), so cut array length from 20 to 1, saving some SRAM
+static u8 SppDataServer2ClientData[1] 					= {0};  //SppDataServer2ClientData[20]
+// Spp data from Client to Server characteristic variables
+//this array will not used for receiving data(data processed by Attribute Write CallBack function), so cut array length from 20 to 1, saving some SRAM
+static u8 SppDataClient2ServerData[1] 					= {0};  //SppDataClient2ServerData[20]
+
+
+//SPP data descriptor
+static const u8 TelinkSPPS2CDescriptor[] 		 		= "Telink SPP: Module->Phone";
+static const u8 TelinkSPPC2SDescriptor[]        		= "Telink SPP: Phone->Module";
+
+
+//// Telink spp  attribute values
+// static const u8 TelinkSppDataServer2ClientCharVal[19] = {
+// 	CHAR_PROP_READ | CHAR_PROP_NOTIFY,
+// 	U16_LO(SPP_SERVER_TO_CLIENT_DP_H), U16_HI(SPP_SERVER_TO_CLIENT_DP_H),
+// 	TELINK_SPP_DATA_SERVER2CLIENT
+// };
+// static const u8 TelinkSppDataClient2ServerCharVal[19] = {
+// 	CHAR_PROP_READ | CHAR_PROP_WRITE_WITHOUT_RSP,
+// 	U16_LO(SPP_CLIENT_TO_SERVER_DP_H), U16_HI(SPP_CLIENT_TO_SERVER_DP_H),
+// 	TELINK_SPP_DATA_CLIENT2SERVER
+// };
+
+static const u8 TelinkSppDataServer2ClientCharVal[19] = {
+	CHAR_PROP_READ | CHAR_PROP_WRITE_WITHOUT_RSP | CHAR_PROP_WRITE,
+	U16_LO(SPP_SERVER_TO_CLIENT_DP_H), U16_HI(SPP_SERVER_TO_CLIENT_DP_H),
+	TELINK_SPP_DATA_SERVER2CLIENT
+};
+static const u8 TelinkSppDataClient2ServerCharVal[19] = {
+	CHAR_PROP_READ | CHAR_PROP_NOTIFY,
+	U16_LO(SPP_CLIENT_TO_SERVER_DP_H), U16_HI(SPP_CLIENT_TO_SERVER_DP_H),
+	TELINK_SPP_DATA_CLIENT2SERVER
+};
+
+
+
+
 static const u16 clientCharacterCfgUUID = GATT_UUID_CLIENT_CHAR_CFG;
 
 static const u16 extReportRefUUID = GATT_UUID_EXT_REPORT_REF;
@@ -99,7 +144,8 @@ static u16 serviceChangeVal[2] = {0};
 
 static u8 serviceChangeCCC[2] = {0,0};
 
-static const u8 my_devName[] = {'t','S','a','m','p','l','e'};
+// static const u8 my_devName[] = {'t','S','a','m','p','l','e'};
+static const u8 my_devName[] = {'B','T','a','m','p','l','e'};
 
 static const u8 my_PnPtrs [] = {0x02, 0x8a, 0x24, 0x66, 0x82, 0x01, 0x00};
 
@@ -346,6 +392,33 @@ static const u8 my_OtaCharVal[19] = {
 	TELINK_SPP_DATA_OTA,
 };
 
+/**
+ * @brief      write callback of Attribute of TelinkSppDataClient2ServerUUID
+ * @param[in]  para - rf_packet_att_write_t
+ * @return     0
+ */
+extern bool rev_master ;
+int module_onReceiveData(void *para)
+{
+	rf_packet_att_write_t *p = (rf_packet_att_write_t*)para;
+	u8 len = p->l2capLen - 3;
+	if(len > 0)
+	{
+		// spp_event_t *pEvt =  (spp_event_t *)p;
+		// pEvt->token = 0xFF;
+		// pEvt->paramLen = p->l2capLen + 2;   //l2cap_len + 2 byte (eventId)
+		// pEvt->eventId = 0x07a0;  //data received event
+		// memcpy(pEvt->param, &p->opcode, len + 3);
+
+		// spp_send_data(HCI_FLAG_EVENT_TLK_MODULE, pEvt);
+		// printf("Receive data, handle = %x\r\n", p->handle1 | (p->handle1<<8));
+		// array_printf(&p->value, len);
+		rev_master = true;
+	}
+
+	return 0;
+}
+
 
 // TM : to modify
 static const attribute_t my_Attributes[] = {
@@ -435,6 +508,22 @@ static const attribute_t my_Attributes[] = {
 	{0,ATT_PERMISSIONS_READ,2,sizeof(my_batCharVal),(u8*)(&my_characterUUID), (u8*)(my_batCharVal), 0},				//prop
 	{0,ATT_PERMISSIONS_READ,2,sizeof(my_batVal),(u8*)(&my_batCharUUID), 	(u8*)(my_batVal), 0},	//value
 	{0,ATT_PERMISSIONS_RDWR,2,sizeof(batteryValueInCCC),(u8*)(&clientCharacterCfgUUID), 	(u8*)(batteryValueInCCC), 0},	//value
+
+	////////////////spp/////////////////
+	// 000f - 0016 SPP
+	{8,ATT_PERMISSIONS_READ,2,16,(u8*)(&my_primaryServiceUUID), 	(u8*)(&TelinkSppServiceUUID), 0},
+	{0,ATT_PERMISSIONS_READ,2,sizeof(TelinkSppDataServer2ClientCharVal),(u8*)(&my_characterUUID), 		(u8*)(TelinkSppDataServer2ClientCharVal), 0},				//prop
+	// {0,ATT_PERMISSIONS_READ,16,sizeof(SppDataServer2ClientData),(u8*)(&TelinkSppDataServer2ClientUUID), (u8*)(SppDataServer2ClientData), 0},	//value
+	{0,ATT_PERMISSIONS_RDWR,16,sizeof(SppDataServer2ClientData),(u8*)(&TelinkSppDataServer2ClientUUID), (u8*)(SppDataServer2ClientData), (att_readwrite_callback_t)&module_onReceiveData},	//value
+	// {0,ATT_PERMISSIONS_RDWR,2,2,(u8*)&clientCharacterCfgUUID,(u8*)(&SppDataServer2ClientDataCCC)},
+	{0,ATT_PERMISSIONS_READ,2,sizeof(TelinkSPPS2CDescriptor),(u8*)&userdesc_UUID,(u8*)(&TelinkSPPS2CDescriptor)},
+	{0,ATT_PERMISSIONS_READ,2,sizeof(TelinkSppDataClient2ServerCharVal),(u8*)(&my_characterUUID), 		(u8*)(TelinkSppDataClient2ServerCharVal), 0},				//prop
+	// {0,ATT_PERMISSIONS_RDWR,16,sizeof(SppDataClient2ServerData),(u8*)(&TelinkSppDataClient2ServerUUID), (u8*)(SppDataClient2ServerData), (att_readwrite_callback_t)&module_onReceiveData},	//value
+	{0,ATT_PERMISSIONS_RDWR,16,sizeof(SppDataClient2ServerData),(u8*)(&TelinkSppDataClient2ServerUUID), (u8*)(SppDataClient2ServerData), 0},	//value
+	{0,ATT_PERMISSIONS_RDWR,2,2,(u8*)&clientCharacterCfgUUID,(u8*)(&SppDataServer2ClientDataCCC)},
+	{0,ATT_PERMISSIONS_READ,2,sizeof(TelinkSPPC2SDescriptor),(u8*)&userdesc_UUID,(u8*)(&TelinkSPPC2SDescriptor)},
+
+
 
 	////////////////////////////////////// OTA /////////////////////////////////////////////////////
 	// 002e - 0032
