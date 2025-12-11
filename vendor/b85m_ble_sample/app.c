@@ -329,6 +329,7 @@ void 	task_terminate(u8 e,u8 *p, int n) //*p is terminate reason
 
 	#if (UI_LED_ENABLE)
 		gpio_write(GPIO_LED_RED, !LED_ON_LEVAL);
+		gpio_write(GPIO_LED_BLUE, !LED_ON_LEVAL);
 	#endif
 
 
@@ -385,6 +386,7 @@ void	task_connect (u8 e, u8 *p, int n)
 
 	#if (UI_LED_ENABLE)
 		gpio_write(GPIO_LED_RED, LED_ON_LEVAL);
+		gpio_write(GPIO_LED_BLUE, !LED_ON_LEVAL);
 	#endif
 }
 
@@ -640,8 +642,67 @@ _attribute_ram_code_ void user_init_deepRetn(void)
 #endif
 }
 
-_attribute_data_retention_ u8 notify_data_test[20] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
+// _attribute_data_retention_ u8 notify_data_test[20] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
+// _attribute_data_retention_ u8 notify_data_test[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,0x08,0x09,0x0a,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30};
 bool rev_master = false;
+
+#define MAX_TEST_DATA_LEN   1024
+
+// u8 test_buf[MAX_TEST_DATA_LEN];
+u8 test_buf[MAX_TEST_DATA_LEN] = {
+	0x01, 0x03, 0x4C, 
+	0x0C, 0x6D, 0x0C, 0x6C, 0x0C, 0x6C, 0x0C, 0x5C,
+    0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49,
+    0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49,
+    0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49,
+    0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49,
+    0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49,
+    0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49,
+    0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49, 0xEE, 0x49,
+    0x0C, 0x6D, 0x0C, 0x5C, 0x00, 0x01, 0x00, 0x04, 
+	0x00, 0x11, 0x04, 0xF6, 
+	0xAD, 0x2E
+};
+
+void generate_test_data(int len)
+{
+    for(int i = 0; i < len; i++) {
+        test_buf[i] = i & 0xFF;  // 有规律的数据，方便 checksum
+    }
+}
+
+#define TELINK_NOTIFY_PAYLOAD   20   // MTU=23 时 payload = 20
+
+ble_sts_t notify_big_packet(u16 conn, u16 handle, u8 *data, u16 len)
+{
+    u16 offset = 0;
+
+    while (offset < len)
+    {
+        u8 chunk = (len - offset) > TELINK_NOTIFY_PAYLOAD ?
+                    TELINK_NOTIFY_PAYLOAD :
+                    (len - offset);
+
+        ble_sts_t ret = blc_gatt_pushHandleValueNotify(
+                            conn,
+                            handle,
+                            data + offset,
+                            chunk);
+
+        if(ret != BLE_SUCCESS) {
+            printf("Send FAIL offset=%d ret=%x\r\n", offset, ret);
+            return ret;
+        }
+
+        offset += chunk;
+
+        // Telink 特性：需要给对端一点时间，否则 notify 会被吞
+        // sleep_us(800);   // 0.8ms足够安全
+    }
+
+    return BLE_SUCCESS;
+}
+
 
 /**
  * @brief     BLE main loop
@@ -650,7 +711,6 @@ bool rev_master = false;
  */
 void main_loop (void)
 {
-
 	////////////////////////////////////// BLE entry /////////////////////////////////
 	blt_sdk_main_loop();
 
@@ -675,18 +735,53 @@ void main_loop (void)
 		if(device_in_connection_state && rev_master)
 		{
 			rev_master = false;
+		#if 0
+			u8 remain = sizeof(notify_data_test);
+			// u8 remain = 30;
+			u8 *p = notify_data_test;
+			rev_master = false;
 			ble_sts_t ret;
 			interval_update_tick = clock_time();
 			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_SERVER_TO_CLIENT_DP_H, notify_data_test, 8);
-			ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, 8);
+			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, sizeof(notify_data_test));
+			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, 30);
+			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, 24);
+			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, 21);
 
-			if(ret == BLE_SUCCESS)
+			while(remain > 0)
 			{
-				printf("Notify data to master\r\n");
-				array_printf(notify_data_test, 8);
-				notify_data_test[0]++;
+    			u8 send_len = remain > 20 ? 20 : remain;
+
+			blc_gatt_pushHandleValueNotify(
+				BLS_CONN_HANDLE,
+				SPP_CLIENT_TO_SERVER_DP_H,
+				p,
+				send_len);
+
+			    p += send_len;
+    			remain -= send_len;
 			}
+
+			// if(ret == BLE_SUCCESS)
+			// {
+			// 	printf("Notify data to master\r\n");
+			// 	array_printf(notify_data_test, 8);
+			// 	notify_data_test[0]++;
+			// }
+		#endif
+
+			 int len = 81;  // 你想测多少就填多少
+    		// generate_test_data(len);
+
+    // printf("Start sending %d bytes...\r\n", len);
+
+    ble_sts_t r = notify_big_packet(
+                    BLS_CONN_HANDLE,
+                    SPP_CLIENT_TO_SERVER_DP_H,   // 你的 notify 句柄
+                    test_buf,
+                    len);
 		}
+
 	}
 
 
