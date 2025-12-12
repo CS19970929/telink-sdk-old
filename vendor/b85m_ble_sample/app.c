@@ -646,6 +646,35 @@ _attribute_ram_code_ void user_init_deepRetn(void)
 // _attribute_data_retention_ u8 notify_data_test[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,0x08,0x09,0x0a,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30};
 bool rev_master = false;
 
+u8 Sci_CRC16RTU(u8 *pszBuf, u8 unLength)
+{
+	u16 CRCC = 0XFFFF;
+	u32 CRC_count;
+
+	for (CRC_count = 0; CRC_count < unLength; CRC_count++)
+	{
+		int i;
+
+		CRCC = CRCC ^ *(pszBuf + CRC_count);
+
+		for (i = 0; i < 8; i++)
+		{
+			if (CRCC & 1)
+			{
+				CRCC >>= 1;
+				CRCC ^= 0xA001;
+			}
+			else
+			{
+				CRCC >>= 1;
+			}
+		}
+	}
+
+	return CRCC;
+}
+
+
 #define MAX_TEST_DATA_LEN   1024
 
 // u8 test_buf[MAX_TEST_DATA_LEN];
@@ -771,7 +800,59 @@ void main_loop (void)
 		#endif
 
 			 int len = 81;  // 你想测多少就填多少
+			 static u8 vol_cnt = 0;
+			 vol_cnt++;
     		// generate_test_data(len);
+			{
+				u16 vol = 2500 + vol_cnt;
+				test_buf[0] = 0x01;
+				test_buf[1] = 0x03;
+				test_buf[2] = 38 * 2;
+				// for (size_t i = 0; i < 38; i+=,i++)
+				for (size_t i = 0; i < 39; i++)
+				{
+					test_buf[3 + i * 2] =  vol >> 8;
+					test_buf[4 + i * 2] =  vol & 0xff;
+					if(i == 32)
+					{
+						test_buf[3 + i * 2] =  (3500 + vol_cnt) >> 8;
+						test_buf[4 + i * 2] =  (3500 + vol_cnt) & 0xff;
+					}
+					else if(i == 33)
+					{
+						test_buf[3 + i * 2] =  (2000 + vol_cnt) >> 8;
+						test_buf[4 + i * 2] =  (2000 + vol_cnt) & 0xff;
+					}
+					else if(i == 34)
+					{
+						test_buf[3 + i * 2] =  1 >> 8;
+						test_buf[4 + i * 2] =  1 & 0xff;
+					}
+					else if(i == 35)
+					{
+						test_buf[3 + i * 2] =  2 >> 8;
+						test_buf[4 + i * 2] =  2 & 0xff;
+					}
+					else if(i == 36)
+					{
+						test_buf[3 + i * 2] =  (0 + vol_cnt) >> 8;
+						test_buf[4 + i * 2] =  (0 + vol_cnt) & 0xff;
+					}
+					else if(i == 37)
+					{
+						test_buf[3 + i * 2] =  (1000 + vol_cnt) >> 8;
+						test_buf[4 + i * 2] =  (1000 + vol_cnt) & 0xff;
+					}
+					else if(i == 38)
+					{
+						u16 crc = Sci_CRC16RTU(test_buf, len - 2);
+						test_buf[3 + i * 2] = crc & 0xff;
+						test_buf[4 + i * 2] = crc >> 8;
+					}
+				}
+
+				
+			}
 
     // printf("Start sending %d bytes...\r\n", len);
 
