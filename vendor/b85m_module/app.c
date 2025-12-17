@@ -367,6 +367,7 @@ void app_power_management ()
 }
 
 
+_attribute_data_retention_	u32	interval_update_tick;
 /**
  * @brief		user initialization when MCU power on or wake_up from deepSleep mode
  * @param[in]	none
@@ -553,6 +554,9 @@ void user_init_normal(void)
 	bls_ota_registerResultIndicateCb(show_ota_result);
 #endif
 
+	printf("hello");
+
+	interval_update_tick = clock_time() | 1; //none zero
 }
 
 
@@ -627,6 +631,12 @@ void main_loop (void)
 {
 	////////////////////////////////////// BLE entry /////////////////////////////////
 	blt_sdk_main_loop();
+
+	if(clock_time_exceed(interval_update_tick, 1000*1000))
+	{
+			interval_update_tick = clock_time();
+			printf("hello%n");
+	}
 
 	////////////////////////////////////// UI entry /////////////////////////////////
 

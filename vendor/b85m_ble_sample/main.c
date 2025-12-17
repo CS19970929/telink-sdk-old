@@ -102,6 +102,8 @@ _attribute_ram_code_ int main (void)    //must run in ramcode
 	}
 
     irq_enable();
+
+	uart_send_byte(0xaa);
 	while (1) {
 #if (MODULE_WATCHDOG_ENABLE)
 		wd_clear(); //clear watch dog

@@ -56,8 +56,8 @@
 #include "app_config.h"
 
 
-#define 	   ADV_IDLE_ENTER_DEEP_TIME				60  //60 s
-#define 	   CONN_IDLE_ENTER_DEEP_TIME			60  //60 s
+#define 	   ADV_IDLE_ENTER_DEEP_TIME				30  //60 s
+#define 	   CONN_IDLE_ENTER_DEEP_TIME			(60 * 10)  //60 s
 
 #define 	   MY_DIRECT_ADV_TMIE							2000000
 
@@ -386,7 +386,7 @@ void	task_connect (u8 e, u8 *p, int n)
 
 	#if (UI_LED_ENABLE)
 		gpio_write(GPIO_LED_RED, LED_ON_LEVAL);
-		gpio_write(GPIO_LED_BLUE, !LED_ON_LEVAL);
+		gpio_write(GPIO_LED_BLUE, LED_ON_LEVAL);
 	#endif
 }
 
@@ -396,6 +396,7 @@ void	task_connect (u8 e, u8 *p, int n)
  * @param	   none
  * @return     none
  */
+#if 0
 _attribute_ram_code_ void blt_pm_proc(void)
 {
 #if(BLE_APP_PM_ENABLE)
@@ -425,7 +426,14 @@ _attribute_ram_code_ void blt_pm_proc(void)
 				if( blc_ll_getCurrentState() == BLS_LINK_STATE_ADV && !sendTerminate_before_enterDeep && \
 					clock_time_exceed(advertise_begin_tick , ADV_IDLE_ENTER_DEEP_TIME * 1000000))
 				{
-					cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0);  //deepsleep
+					// gpio_write(GPIO_LED_RED, LED_ON_LEVAL);
+					// gpio_write(GPIO_LED_BLUE, LED_ON_LEVAL);
+					// cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0);  //deepsleep
+					// cpu_sleep_wakeup(SUSPEND_MODE, PM_WAKEUP_PAD, 0);  //deepsleep
+					cpu_sleep_wakeup(SUSPEND_MODE, PM_WAKEUP_PAD | PM_WAKEUP_TIMER, 5 * CLOCK_16M_SYS_TIMER_CLK_1S);  //deepsleep
+					// BSP_Printf("[!!!] wakupup 1");
+					// gpio_write(GPIO_LED_RED, !LED_ON_LEVAL);
+					// gpio_write(GPIO_LED_BLUE, !LED_ON_LEVAL);
 				}
 				//conn 60s no event(key/voice/led), enter deepsleep
 				else if( device_in_connection_state && \
@@ -437,8 +445,35 @@ _attribute_ram_code_ void blt_pm_proc(void)
 					sendTerminate_before_enterDeep = 1;
 				}
 			}
+			// printf("[!!!] wakupup 2");
 	#endif  //end of !TEST_CONN_CURRENT_ENABLE
 #endif  //end of BLE_APP_PM_ENABLE
+}
+#endif
+
+_attribute_data_retention_	u32	sleep_update_tick = 0;
+_attribute_ram_code_ void blt_pm_proc(void)
+{
+	static u16 sleep_cnt;
+
+	// if(clock_time_exceed(sleep_update_tick, 1000*1000*5))
+	if(clock_time_exceed(sleep_update_tick, 1000*1000))
+	{
+	__rtc_sleep:
+			gpio_write(GPIO_LED_BLUE, !LED_ON_LEVAL);
+			cpu_sleep_wakeup(SUSPEND_MODE, PM_WAKEUP_PAD | PM_WAKEUP_TIMER, clock_time()+  1 * CLOCK_16M_SYS_TIMER_CLK_1S);  //deepsleep
+			sleep_update_tick = clock_time();
+			gpio_write(GPIO_LED_BLUE, LED_ON_LEVAL);
+			
+			while (1)
+			{
+			if(clock_time_exceed(sleep_update_tick, 1000*200))
+				goto __rtc_sleep;
+				
+			}
+			
+	}
+
 }
 
 
@@ -604,6 +639,46 @@ void user_init_normal(void)
 
 
 	advertise_begin_tick = clock_time();
+
+	{
+			////////////////// SPP initialization ///////////////////////////////////
+	//note: dma addr must be set first before any other uart initialization!
+	// u8 *uart_rx_addr = (spp_rx_fifo_b + (spp_rx_fifo.wptr & (spp_rx_fifo.num-1)) * spp_rx_fifo.size);
+	// uart_recbuff_init( (unsigned char *)uart_rx_addr, spp_rx_fifo.size);
+
+	uart_gpio_set(UART_TX_PB1, UART_RX_PB0);
+
+	uart_reset();  //will reset uart digital registers from 0x90 ~ 0x9f, so uart setting must set after this reset
+
+	//baud rate: 115200
+	#if (CLOCK_SYS_CLOCK_HZ == 16000000)
+		uart_init(9, 13, PARITY_NONE, STOP_BIT_ONE);
+	#elif (CLOCK_SYS_CLOCK_HZ == 24000000)
+		uart_init(12, 15, PARITY_NONE, STOP_BIT_ONE);
+	#elif (CLOCK_SYS_CLOCK_HZ == 32000000)
+		uart_init(30, 8, PARITY_NONE, STOP_BIT_ONE);
+	#elif (CLOCK_SYS_CLOCK_HZ == 48000000)
+		uart_init(25, 15, PARITY_NONE, STOP_BIT_ONE);
+	#endif
+
+	uart_dma_enable(1, 1); 	//uart data in hardware buffer moved by dma, so we need enable them first
+
+	irq_set_mask(FLD_IRQ_DMA_EN);
+	dma_chn_irq_enable(FLD_DMA_CHN_UART_RX | FLD_DMA_CHN_UART_TX, 1);   	//uart Rx/Tx dma irq enable
+
+	uart_irq_enable(0, 0);  	//uart Rx/Tx irq no need, disable them
+
+	interval_update_tick = clock_time() | 1; //none zero
+	// extern int rx_from_uart_cb (void);
+	// extern int tx_to_uart_cb (void);
+	// blc_register_hci_handler(rx_from_uart_cb, tx_to_uart_cb);				//customized uart handler
+	BSP_Printf("[!!!]init");
+	// extern int controller_event_handler(u32 h, u8 *para, int n);
+	// blc_hci_registerControllerEventHandler(controller_event_handler);		//register event callback
+	// bls_hci_mod_setEventMask_cmd(0xfffff);			//enable all 18 events,event list see ll.h
+
+
+	}
 }
 
 
@@ -743,7 +818,6 @@ void main_loop (void)
 	////////////////////////////////////// BLE entry /////////////////////////////////
 	blt_sdk_main_loop();
 
-
 	////////////////////////////////////// UI entry /////////////////////////////////
 	#if (UI_KEYBOARD_ENABLE)
 			proc_keyboard (0,0, 0);
@@ -758,6 +832,16 @@ void main_loop (void)
 				proc_button(0, 0, 0);  //button triggers pair & unpair  and OTA
 			}
 	#endif
+
+		if(clock_time_exceed(interval_update_tick, 1000*200))
+		{
+			gpio_toggle(GPIO_LED_BLUE);
+			// gpio_toggle(GPIO_LED_GREEN);
+			// gpio_toggle(GPIO_LED_WHITE);
+			interval_update_tick = clock_time();
+			// uart_send_byte(0xbb);
+			// printf("1s task ing");
+		}
 
 	{
 		// if(device_in_connection_state && clock_time_exceed(interval_update_tick, 1000*1000))
@@ -801,6 +885,8 @@ void main_loop (void)
 
 			 int len = 81;  // 你想测多少就填多少
 			 static u8 vol_cnt = 0;
+			uart_send_byte(0x00 + vol_cnt);
+			// printf("connect... ");
 			 vol_cnt++;
     		// generate_test_data(len);
 			{
@@ -878,5 +964,4 @@ void main_loop (void)
 			}
 	#endif
 }
-
 

@@ -50,6 +50,7 @@
 #include "app_att.h"
 #include "battery_check.h"
 
+#include "app_config.h"
 
 #if (BATT_CHECK_ENABLE)
 

@@ -47,8 +47,8 @@
 
 
 ///////////////////////// Feature Configuration////////////////////////////////////////////////
-#define BLE_APP_PM_ENABLE								0
-#define PM_DEEPSLEEP_RETENTION_ENABLE					0
+#define BLE_APP_PM_ENABLE								1
+#define PM_DEEPSLEEP_RETENTION_ENABLE					1
 #define TEST_CONN_CURRENT_ENABLE            			0 //test connection current, disable UI to have a pure power
 #define BLE_REMOTE_SECURITY_ENABLE      				1
 
@@ -269,6 +269,38 @@ enum{
 /////////////////// watchdog  //////////////////////////////
 #define MODULE_WATCHDOG_ENABLE		0
 #define WATCHDOG_INIT_TIMEOUT		500  //ms
+
+
+#define UART_PRINT_DEBUG_ENABLE			1
+#if (UART_PRINT_DEBUG_ENABLE)  
+	//the baud rate should not bigger than 1M(system timer clock is constant 16M)  
+#if 0
+	#define PRINT_BAUD_RATE                 1000000  //1M baud rate,should Not bigger than 1Mb/s  
+	#define DEBUG_INFO_TX_PIN               GPIO_PA0  
+	#define PULL_WAKEUP_SRC_PA0             PM_PIN_PULLUP_10K  
+	#define PA0_OUTPUT_ENABLE               1  
+	#define PA0_DATA_OUT                    1 //must  
+#endif
+#if 0
+	#define PRINT_BAUD_RATE                 19200  //1M baud rate,should Not bigger than 1Mb/s  
+	#define DEBUG_INFO_TX_PIN               GPIO_PD0  
+	#define PULL_WAKEUP_SRC_PD0             PM_PIN_PULLUP_10K  
+	#define PD0_OUTPUT_ENABLE               1  
+	#define PD0_DATA_OUT                    1 //must  
+#endif
+#if 1
+	#define PRINT_BAUD_RATE                 19200  //1M baud rate,should Not bigger than 1Mb/s  
+	#define DEBUG_INFO_TX_PIN               GPIO_PA2  
+	#define PULL_WAKEUP_SRC_PA2             PM_PIN_PULLUP_10K  
+	#define PA2_OUTPUT_ENABLE               1  
+	#define PA2_DATA_OUT                    1 //must  
+#endif
+
+	#include "application/print/u_printf.h"
+#endif
+
+#define BSP_Printf		printf
+// #define BSP_Printf(...)
 
 
 

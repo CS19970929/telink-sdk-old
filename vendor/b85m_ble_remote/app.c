@@ -57,6 +57,10 @@
 #include "rc_ir_learn.h"
 #include "app_audio.h"
 #include "application/audio/gl_audio.h"
+#include "app_config.h"
+
+#define __PROJECT_8258_BLE_REMOTE__ 1
+
 #if (__PROJECT_8258_BLE_REMOTE__ || __PROJECT_8278_BLE_REMOTE__)
 
 

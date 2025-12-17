@@ -419,6 +419,49 @@ int module_onReceiveData(void *para)
 	return 0;
 }
 
+// int module_onReceiveData(void *para)
+// {
+    //rf_packet_att_write_t *p = (rf_packet_att_write_t*)para;
+
+//     // ATT payload = l2capLen - opcode(1) - handle(2)
+//     u8 len = p->l2capLen - 3;
+//     if (len == 0) {
+//         return 0;
+//     }
+
+//     u8 *rx_data = &p->value;   // Telink ATT 鍐欑殑瀹為檯鏁版嵁璧风偣
+
+//     // 鎵嬪伐鍒嗗寘骞� notify 鍥炲幓 鈥斺�� 鏍稿績閮ㄥ垎
+//     u16 handle_notify = SPP_SERVER_TO_CLIENT_DP_H;   // 浣犵殑 notify handle
+
+//     // u16 conn = blc_ll_getCurrentConnHandle();        // 鑾峰彇褰撳墠杩炴帴鍙ユ焺
+//     // if (conn == 0xFFFF) {                            // 鏈繛鎺ヤ繚鎶�
+//     //     return 0;
+//     // }
+
+//     int remain = len;
+//     u8 *ptr = rx_data;
+
+//     while (remain > 0) {
+//         int send_len = (remain > 20) ? 20 : remain;
+
+//         blc_gatt_pushHandleValueNotify(
+//             BLS_CONN_HANDLE,
+//             SPP_CLIENT_TO_SERVER_DP_H,
+//             ptr,
+//             send_len
+//         );
+
+//         ptr += send_len;
+//         remain -= send_len;
+//     }
+
+//     rev_master = true;   // 淇濈暀浣犲師鏉ョ殑鏍囪锛堢湅璧锋潵浣犻」鐩敤杩欎釜鍋氱姸鎬佸垽鏂級
+//     return 0;
+
+// }
+
+
 
 // TM : to modify
 static const attribute_t my_Attributes[] = {
