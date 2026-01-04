@@ -441,6 +441,48 @@ _attribute_ram_code_ void blt_pm_proc(void)
 #endif  //end of BLE_APP_PM_ENABLE
 }
 
+void i2c_master_test_init(void)
+{
+
+	//I2C pin set
+#if(MCU_CORE_TYPE == MCU_CORE_827x)
+	i2c_gpio_set(I2C_GPIO_SDA_C0,I2C_GPIO_SCL_C1);  	//SDA/CK : C0/C1
+#elif (MCU_CORE_TYPE == MCU_CORE_825x)
+	i2c_gpio_set(I2C_GPIO_GROUP_C0C1);  	//SDA/CK : C0/C1
+#endif
+
+	//slave device id 0x5C(write) 0x5D(read)
+	//i2c clock 200K, only master need set i2c clock
+	// i2c_master_init(0x34, (unsigned char)(CLOCK_SYS_CLOCK_HZ/(4*200000)) );
+	// i2c_master_init(0x34, (unsigned char)(CLOCK_SYS_CLOCK_HZ/(4*400000)) );
+	i2c_master_init(0x34, (unsigned char)(CLOCK_SYS_CLOCK_HZ/(4*100000)));
+
+
+}
+
+volatile unsigned char i2c_master_rx_buff[43] = {0};
+void i2c_master_mainloop(void)
+{
+	#define SLAVE_DMA_MODE_OTHER_DEV_WRITE    (0x46)
+	#define SLAVE_DMA_MODE_OTHER_DEV_READ     (0x46)
+		u8 addr = SLAVE_DMA_MODE_OTHER_DEV_READ;
+		u8 len  = 0x2A;              // 手册说：长度不包含CRC
+		// i2c_master_tx_buff[0] += 1;
+		//825x slave dma mode, sram address(0x40000~0x4FFFF) length should be 3 byte
+		// i2c_write_series(SLAVE_DMA_MODE_OTHER_DEV_WRITE, 1, (unsigned char *)i2c_master_tx_buff, DBG_DATA_LEN);
+		// WaitMs(100);   //1 S
+		i2c_read_series(((u16)addr << 8) | len,  2, (unsigned char *)i2c_master_rx_buff, len + 1);
+
+	#if 0
+		/*********** copy the data read by i2c master from slave for debug  ****************/
+		memcpy( (unsigned char *)(master_rx_buff_debug + master_rx_index*DBG_DATA_LEN), (unsigned char *)i2c_master_rx_buff, DBG_DATA_LEN);
+		master_rx_index ++;
+		if(master_rx_index>=DBG_DATA_NUM){
+			master_rx_index = 0;
+		}
+	#endif
+
+}
 
 
 
@@ -604,6 +646,10 @@ void user_init_normal(void)
 
 
 	advertise_begin_tick = clock_time();
+
+	{
+		i2c_master_test_init();
+	}
 }
 
 
@@ -758,6 +804,23 @@ void main_loop (void)
 				proc_button(0, 0, 0);  //button triggers pair & unpair  and OTA
 			}
 	#endif
+	/*
+	ffff
+	fff0
+	ffef
+	ffea
+	*/
+
+	_attribute_data_retention_ static u32 update_bms_info_tick = 0;
+	if(clock_time_exceed(update_bms_info_tick , 1000 * 200))
+	{
+		update_bms_info_tick = clock_time();
+		gpio_toggle(GPIO_LED_BLUE);
+		i2c_master_mainloop();
+		//todo 1s擦写一次flash，并notify
+void update_my_batVal(void);
+		update_my_batVal();
+	}
 
 	{
 		// if(device_in_connection_state && clock_time_exceed(interval_update_tick, 1000*1000))
@@ -808,11 +871,29 @@ void main_loop (void)
 				test_buf[0] = 0x01;
 				test_buf[1] = 0x03;
 				test_buf[2] = 38 * 2;
+
+				// int temp = i2c_master_rx_buff[8];
+				// temp = temp << 8 | i2c_master_rx_buff[9];
+				// temp = temp * 5 / 32;
 				// for (size_t i = 0; i < 38; i+=,i++)
 				for (size_t i = 0; i < 39; i++)
 				{
-					test_buf[3 + i * 2] =  vol >> 8;
-					test_buf[4 + i * 2] =  vol & 0xff;
+					#if 1
+					if(i <= 16)
+					{
+						int temp = i2c_master_rx_buff[8 + 2*i];
+						temp = temp << 8 | i2c_master_rx_buff[9+ 2*i];
+						temp = temp * 5 /32;
+						test_buf[3 + i * 2] =  temp >> 8;
+						test_buf[4 + i * 2] =  temp & 0xff;
+					}
+
+					#endif
+					// test_buf[3 + i * 2] =  temp >> 8;
+					// test_buf[4 + i * 2] =  temp & 0xff;
+					// test_buf[3 + i * 2] =  vol >> 8;
+					// test_buf[4 + i * 2] =  vol & 0xff;
+
 					if(i == 32)
 					{
 						test_buf[3 + i * 2] =  (3500 + vol_cnt) >> 8;

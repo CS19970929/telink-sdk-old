@@ -153,7 +153,7 @@ static const u8 my_PnPtrs [] = {0x02, 0x8a, 0x24, 0x66, 0x82, 0x01, 0x00};
 static const u16 my_batServiceUUID        = SERVICE_UUID_BATTERY;
 static const u16 my_batCharUUID       	  = CHARACTERISTIC_UUID_BATTERY_LEVEL;
 static u8 batteryValueInCCC[2];
-static u8 my_batVal[1] 	= {99};
+static u16 my_batVal[1] 	= {3000};
 
 //////////////////////// HID /////////////////////////////////////////////////////
 
@@ -391,6 +391,15 @@ static const u8 my_OtaCharVal[19] = {
 	U16_LO(OTA_CMD_OUT_DP_H), U16_HI(OTA_CMD_OUT_DP_H),
 	TELINK_SPP_DATA_OTA,
 };
+
+extern volatile unsigned char i2c_master_rx_buff[43];
+void update_my_batVal(void)
+{
+	int temp = i2c_master_rx_buff[8];
+	temp = temp << 8 | i2c_master_rx_buff[9];
+	my_batVal[0] = temp * 5 / 32;
+	blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, BATT_LEVEL_INPUT_DP_H, &my_batVal[0], sizeof(my_batVal[0]));
+}
 
 /**
  * @brief      write callback of Attribute of TelinkSppDataClient2ServerUUID
