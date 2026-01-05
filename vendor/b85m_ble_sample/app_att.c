@@ -393,13 +393,19 @@ static const u8 my_OtaCharVal[19] = {
 };
 
 extern volatile unsigned char i2c_master_rx_buff[43];
-void update_my_batVal(void)
+// void update_my_batVal(void)
+// {
+// 	int temp = i2c_master_rx_buff[8];
+// 	temp = temp << 8 | i2c_master_rx_buff[9];
+// 	my_batVal[0] = temp * 5 / 32;
+// 	blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, BATT_LEVEL_INPUT_DP_H, &my_batVal[0], sizeof(my_batVal[0]));
+// }
+void update_my_batVal(u16 val)
 {
-	int temp = i2c_master_rx_buff[8];
-	temp = temp << 8 | i2c_master_rx_buff[9];
-	my_batVal[0] = temp * 5 / 32;
+	my_batVal[0] = val;
 	blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, BATT_LEVEL_INPUT_DP_H, &my_batVal[0], sizeof(my_batVal[0]));
 }
+
 
 /**
  * @brief      write callback of Attribute of TelinkSppDataClient2ServerUUID
@@ -408,12 +414,27 @@ void update_my_batVal(void)
  */
 extern bool rev_master ;
 extern u8 test_buf[];
+extern void notify_votage(void);
+extern void notify_protect_prarm(void);
+u16 addr = 0;
 int module_onReceiveData(void *para)
 {
 	rf_packet_att_write_t *p = (rf_packet_att_write_t*)para;
 	u8 len = p->l2capLen - 3;
+	u8 *data = (u8 *)&p->value;
+	u8 slave = data[0];
+	u8 cmd   = data[1]; 
+	// u16 addr = (data[2] << 8) | data[3];
+	addr = (data[2] << 8) | data[3];
 	if(len > 0)
 	{
+		// if(addr == 0xd000)
+		// 	notify_votage();
+		// else if (addr == 0x2100)
+		// 	notify_protect_prarm();
+
+		// update_my_batVal(addr);
+		
 		// spp_event_t *pEvt =  (spp_event_t *)p;
 		// pEvt->token = 0xFF;
 		// pEvt->paramLen = p->l2capLen + 2;   //l2cap_len + 2 byte (eventId)

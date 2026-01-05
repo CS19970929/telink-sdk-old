@@ -815,6 +815,33 @@ u16 protect_para[65] = {
 	100, 200, 300, 100, 100,
 	20, 10, 5, 6, 100,
 };
+
+void notify_soc(void)
+{
+	int len = 3 + 38*2 + 2;
+	test_buf[0] = 0x01;
+	test_buf[1] = 0x03;
+	test_buf[2] = 65 * 2;
+
+	size_t i;
+	for (i = 0; i < 65; i++)
+	{
+		test_buf[3 + i * 2] =  protect_para[i] >> 8;
+		test_buf[4 + i * 2] =  protect_para[i] & 0xff;
+	}
+
+	i++;
+	u16 crc = Sci_CRC16RTU(test_buf, len - 2);
+	test_buf[3 + i * 2] = crc & 0xff;
+	test_buf[4 + i * 2] = crc >> 8;
+
+	 ble_sts_t r = notify_big_packet(
+                    BLS_CONN_HANDLE,
+                    SPP_CLIENT_TO_SERVER_DP_H,   // 你的 notify 句柄
+                    test_buf,
+                    len);
+}
+
 void notify_protect_prarm(void)
 {
 	int len = 3 + 65*2 + 2;
@@ -955,14 +982,19 @@ void main_loop (void)
 		i2c_master_mainloop();
 		//todo 1s擦写一次flash，并notify
 void update_my_batVal(void);
-		update_my_batVal();
+		// update_my_batVal();
 	}
 
 	{
 		// if(device_in_connection_state && clock_time_exceed(interval_update_tick, 1000*1000))
 		if(device_in_connection_state && rev_master)
 		{
+extern u16 addr;
 			rev_master = false;
+			if(addr == 0xd000)
+				notify_votage();
+			else if (addr == 0x2100)
+				notify_protect_prarm();
 		#if 0
 			u8 remain = sizeof(notify_data_test);
 			// u8 remain = 30;
@@ -974,7 +1006,7 @@ void update_my_batVal(void);
 			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, sizeof(notify_data_test));
 		#endif
 			// notify_votage();
-			notify_protect_prarm();
+			// notify_protect_prarm();
 		}
 
 	}
