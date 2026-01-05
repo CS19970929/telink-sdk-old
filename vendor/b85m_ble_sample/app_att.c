@@ -407,6 +407,7 @@ void update_my_batVal(void)
  * @return     0
  */
 extern bool rev_master ;
+extern u8 test_buf[];
 int module_onReceiveData(void *para)
 {
 	rf_packet_att_write_t *p = (rf_packet_att_write_t*)para;

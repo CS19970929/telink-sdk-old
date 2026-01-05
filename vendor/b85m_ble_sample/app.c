@@ -778,6 +778,142 @@ ble_sts_t notify_big_packet(u16 conn, u16 handle, u8 *data, u16 len)
     return BLE_SUCCESS;
 }
 
+int simulate_soc(void)
+{
+    static int soc = 0;     // 当前 SOC
+    static int dir = 1;     // 1: 增加, -1: 减少
+    {
+        soc += dir;
+
+        // 到达上限，反向
+        if (soc >= 100)
+        {
+            soc = 100;
+            dir = -1;
+        }
+        // 到达下限，反向
+        else if (soc <= 0)
+        {
+            soc = 0;
+            dir = 1;
+        }
+    }
+	return soc;
+}
+u16 protect_para[65] = {
+	3400, 3500, 3600, 3500, 100,
+	3000, 3000, 3000, 3100, 100,
+	12000, 12000, 12000, 11000, 100,
+	9000, 9000, 9000, 10000, 100,
+	800, 800, 800, 100, 10,
+	800, 800, 800, 100, 10,
+	1000, 1000, 1000, 960, 100,
+	400, 400, 400, 450, 200,
+	1000, 1000, 1000, 960, 100,
+	400, 400, 400, 450, 500,
+	1000, 1000, 1000, 960, 100,
+	100, 200, 300, 100, 100,
+	20, 10, 5, 6, 100,
+};
+void notify_protect_prarm(void)
+{
+	int len = 3 + 65*2 + 2;
+	test_buf[0] = 0x01;
+	test_buf[1] = 0x03;
+	test_buf[2] = 65 * 2;
+
+	size_t i;
+	for (i = 0; i < 65; i++)
+	{
+		test_buf[3 + i * 2] =  protect_para[i] >> 8;
+		test_buf[4 + i * 2] =  protect_para[i] & 0xff;
+	}
+
+	i++;
+	u16 crc = Sci_CRC16RTU(test_buf, len - 2);
+	test_buf[3 + i * 2] = crc & 0xff;
+	test_buf[4 + i * 2] = crc >> 8;
+
+	 ble_sts_t r = notify_big_packet(
+                    BLS_CONN_HANDLE,
+                    SPP_CLIENT_TO_SERVER_DP_H,   // 你的 notify 句柄
+                    test_buf,
+                    len);
+
+}
+
+void notify_votage(void)
+{
+	int len = 3 + 38*2 + 2;  // 你想测多少就填多少
+
+	static u8 vol_cnt = 0;
+	vol_cnt++;
+	{
+				u16 vol = 2500 + vol_cnt;
+				test_buf[0] = 0x01;
+				test_buf[1] = 0x03;
+				test_buf[2] = 38 * 2;
+
+				for (size_t i = 0; i < 39; i++)
+				{
+					if(i <= 16)
+					{
+						int temp = i2c_master_rx_buff[8 + 2*i];
+						temp = temp << 8 | i2c_master_rx_buff[9+ 2*i];
+						temp = temp * 5 /32;
+						//todo flash 与soc
+						if(i == 1)
+							temp = simulate_soc();
+						test_buf[3 + i * 2] =  temp >> 8;
+						test_buf[4 + i * 2] =  temp & 0xff;
+					}
+					if(i == 32)
+					{
+						test_buf[3 + i * 2] =  (3500 + vol_cnt) >> 8;
+						test_buf[4 + i * 2] =  (3500 + vol_cnt) & 0xff;
+					}
+					else if(i == 33)
+					{
+						test_buf[3 + i * 2] =  (2000 + vol_cnt) >> 8;
+						test_buf[4 + i * 2] =  (2000 + vol_cnt) & 0xff;
+					}
+					else if(i == 34)
+					{
+						test_buf[3 + i * 2] =  1 >> 8;
+						test_buf[4 + i * 2] =  1 & 0xff;
+					}
+					else if(i == 35)
+					{
+						test_buf[3 + i * 2] =  2 >> 8;
+						test_buf[4 + i * 2] =  2 & 0xff;
+					}
+					else if(i == 36)
+					{
+						test_buf[3 + i * 2] =  (0 + vol_cnt) >> 8;
+						test_buf[4 + i * 2] =  (0 + vol_cnt) & 0xff;
+					}
+					else if(i == 37)
+					{
+						test_buf[3 + i * 2] =  (1000 + vol_cnt) >> 8;
+						test_buf[4 + i * 2] =  (1000 + vol_cnt) & 0xff;
+					}
+					else if(i == 38)
+					{
+						u16 crc = Sci_CRC16RTU(test_buf, len - 2);
+						test_buf[3 + i * 2] = crc & 0xff;
+						test_buf[4 + i * 2] = crc >> 8;
+					}
+				}
+
+				
+			}
+
+			 ble_sts_t r = notify_big_packet(
+                    BLS_CONN_HANDLE,
+                    SPP_CLIENT_TO_SERVER_DP_H,   // 你的 notify 句柄
+                    test_buf,
+                    len);
+}
 
 /**
  * @brief     BLE main loop
@@ -836,112 +972,9 @@ void update_my_batVal(void);
 			interval_update_tick = clock_time();
 			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_SERVER_TO_CLIENT_DP_H, notify_data_test, 8);
 			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, sizeof(notify_data_test));
-			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, 30);
-			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, 24);
-			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, 21);
-
-			while(remain > 0)
-			{
-    			u8 send_len = remain > 20 ? 20 : remain;
-
-			blc_gatt_pushHandleValueNotify(
-				BLS_CONN_HANDLE,
-				SPP_CLIENT_TO_SERVER_DP_H,
-				p,
-				send_len);
-
-			    p += send_len;
-    			remain -= send_len;
-			}
-
-			// if(ret == BLE_SUCCESS)
-			// {
-			// 	printf("Notify data to master\r\n");
-			// 	array_printf(notify_data_test, 8);
-			// 	notify_data_test[0]++;
-			// }
 		#endif
-
-			 int len = 81;  // 你想测多少就填多少
-			 static u8 vol_cnt = 0;
-			 vol_cnt++;
-    		// generate_test_data(len);
-			{
-				u16 vol = 2500 + vol_cnt;
-				test_buf[0] = 0x01;
-				test_buf[1] = 0x03;
-				test_buf[2] = 38 * 2;
-
-				// int temp = i2c_master_rx_buff[8];
-				// temp = temp << 8 | i2c_master_rx_buff[9];
-				// temp = temp * 5 / 32;
-				// for (size_t i = 0; i < 38; i+=,i++)
-				for (size_t i = 0; i < 39; i++)
-				{
-					#if 1
-					if(i <= 16)
-					{
-						int temp = i2c_master_rx_buff[8 + 2*i];
-						temp = temp << 8 | i2c_master_rx_buff[9+ 2*i];
-						temp = temp * 5 /32;
-						test_buf[3 + i * 2] =  temp >> 8;
-						test_buf[4 + i * 2] =  temp & 0xff;
-					}
-
-					#endif
-					// test_buf[3 + i * 2] =  temp >> 8;
-					// test_buf[4 + i * 2] =  temp & 0xff;
-					// test_buf[3 + i * 2] =  vol >> 8;
-					// test_buf[4 + i * 2] =  vol & 0xff;
-
-					if(i == 32)
-					{
-						test_buf[3 + i * 2] =  (3500 + vol_cnt) >> 8;
-						test_buf[4 + i * 2] =  (3500 + vol_cnt) & 0xff;
-					}
-					else if(i == 33)
-					{
-						test_buf[3 + i * 2] =  (2000 + vol_cnt) >> 8;
-						test_buf[4 + i * 2] =  (2000 + vol_cnt) & 0xff;
-					}
-					else if(i == 34)
-					{
-						test_buf[3 + i * 2] =  1 >> 8;
-						test_buf[4 + i * 2] =  1 & 0xff;
-					}
-					else if(i == 35)
-					{
-						test_buf[3 + i * 2] =  2 >> 8;
-						test_buf[4 + i * 2] =  2 & 0xff;
-					}
-					else if(i == 36)
-					{
-						test_buf[3 + i * 2] =  (0 + vol_cnt) >> 8;
-						test_buf[4 + i * 2] =  (0 + vol_cnt) & 0xff;
-					}
-					else if(i == 37)
-					{
-						test_buf[3 + i * 2] =  (1000 + vol_cnt) >> 8;
-						test_buf[4 + i * 2] =  (1000 + vol_cnt) & 0xff;
-					}
-					else if(i == 38)
-					{
-						u16 crc = Sci_CRC16RTU(test_buf, len - 2);
-						test_buf[3 + i * 2] = crc & 0xff;
-						test_buf[4 + i * 2] = crc >> 8;
-					}
-				}
-
-				
-			}
-
-    // printf("Start sending %d bytes...\r\n", len);
-
-    ble_sts_t r = notify_big_packet(
-                    BLS_CONN_HANDLE,
-                    SPP_CLIENT_TO_SERVER_DP_H,   // 你的 notify 句柄
-                    test_buf,
-                    len);
+			// notify_votage();
+			notify_protect_prarm();
 		}
 
 	}
