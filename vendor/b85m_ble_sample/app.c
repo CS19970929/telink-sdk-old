@@ -800,7 +800,7 @@ int simulate_soc(void)
     }
 	return soc;
 }
-u16 protect_para[65] = {
+const u16 protect_para[65] = {
 	3400, 3500, 3600, 3500, 100,
 	3000, 3000, 3000, 3100, 100,
 	12000, 12000, 12000, 11000, 100,
@@ -815,19 +815,103 @@ u16 protect_para[65] = {
 	100, 200, 300, 100, 100,
 	20, 10, 5, 6, 100,
 };
+const u16 soc_para[25] = {
+	600, 600, 600, 600, 600, 600,
+	580, 590, 600,
+	1280,
+	1280, 370,
+	88, 0,
+	66,
+	100,
+	6600,
+	10000,
+	10000,
+	30,
+	0,0,0,
+	0,0
+};
+
+const u16 protect_status[21] = {
+	1, 1, 1,
+	1, 2, 
+	1, 2,
+	1, 2,
+	0x0101,
+	1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+};
+
+const u16 other_status[12] = {
+	0x08, 0, 
+	0, 0, 
+	0, 0, 
+	0, 0, 
+	0, 0, 
+	0, 0, 
+};
+
+void notify_other_status(void)
+{
+	int len = 3 + 12*2 + 2;
+	test_buf[0] = 0x01;
+	test_buf[1] = 0x03;
+	test_buf[2] = 12 * 2;
+
+	size_t i;
+	for (i = 0; i < 12; i++)
+	{
+		test_buf[3 + i * 2] =  other_status[i] >> 8;
+		test_buf[4 + i * 2] =  other_status[i] & 0xff;
+	}
+
+	i++;
+	u16 crc = Sci_CRC16RTU(test_buf, len - 2);
+	test_buf[3 + i * 2] = crc & 0xff;
+	test_buf[4 + i * 2] = crc >> 8;
+
+	 ble_sts_t r = notify_big_packet(
+                    BLS_CONN_HANDLE,
+                    SPP_CLIENT_TO_SERVER_DP_H,   // 你的 notify 句柄
+                    test_buf,
+                    len);
+}
+void notify_protect_status(void)
+{
+	int len = 3 + 21*2 + 2;
+	test_buf[0] = 0x01;
+	test_buf[1] = 0x03;
+	test_buf[2] = 21 * 2;
+
+	size_t i;
+	for (i = 0; i < 21; i++)
+	{
+		test_buf[3 + i * 2] =  protect_status[i] >> 8;
+		test_buf[4 + i * 2] =  protect_status[i] & 0xff;
+	}
+
+	i++;
+	u16 crc = Sci_CRC16RTU(test_buf, len - 2);
+	test_buf[3 + i * 2] = crc & 0xff;
+	test_buf[4 + i * 2] = crc >> 8;
+
+	 ble_sts_t r = notify_big_packet(
+                    BLS_CONN_HANDLE,
+                    SPP_CLIENT_TO_SERVER_DP_H,   // 你的 notify 句柄
+                    test_buf,
+                    len);
+}
 
 void notify_soc(void)
 {
-	int len = 3 + 38*2 + 2;
+	int len = 3 + 25*2 + 2;
 	test_buf[0] = 0x01;
 	test_buf[1] = 0x03;
-	test_buf[2] = 65 * 2;
+	test_buf[2] = 25 * 2;
 
 	size_t i;
-	for (i = 0; i < 65; i++)
+	for (i = 0; i < 25; i++)
 	{
-		test_buf[3 + i * 2] =  protect_para[i] >> 8;
-		test_buf[4 + i * 2] =  protect_para[i] & 0xff;
+		test_buf[3 + i * 2] =  soc_para[i] >> 8;
+		test_buf[4 + i * 2] =  soc_para[i] & 0xff;
 	}
 
 	i++;
@@ -995,6 +1079,12 @@ extern u16 addr;
 				notify_votage();
 			else if (addr == 0x2100)
 				notify_protect_prarm();
+			else if (addr == 0xd026)
+				notify_soc();
+			else if (addr == 0xd115)
+				notify_other_status();
+			else if (addr == 0xd100)
+				notify_protect_status();
 		#if 0
 			u8 remain = sizeof(notify_data_test);
 			// u8 remain = 30;
@@ -1005,8 +1095,6 @@ extern u16 addr;
 			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_SERVER_TO_CLIENT_DP_H, notify_data_test, 8);
 			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, sizeof(notify_data_test));
 		#endif
-			// notify_votage();
-			// notify_protect_prarm();
 		}
 
 	}
