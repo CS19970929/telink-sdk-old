@@ -170,6 +170,20 @@ extern u32	scan_pin_need;
 #define CONSUMER_KEY   	   		1
 #define KEYBOARD_KEY   	   		2
 
+_attribute_data_retention_	u8 		ota_is_working = 0;
+void app_enter_ota_mode(void)
+{
+	ota_is_working = 1;
+	bls_pm_setSuspendMask(SUSPEND_DISABLE);
+	bls_pm_setManualLatency(0);
+	// #if (BLT_APP_LED_ENABLE)
+	// 	device_led_setup(led_cfg[LED_SHINE_OTA]);
+	// #endif
+	// bls_ota_setTimeout(15 * 1000 * 1000); //set OTA timeout  15 seconds
+}
+
+
+
 /**
  * @brief		this function is used to process keyboard matrix status change.
  * @param[in]	none
@@ -406,20 +420,25 @@ void	task_connect (u8 e, u8 *p, int n)
 _attribute_ram_code_ void blt_pm_proc(void)
 {
 #if(BLE_APP_PM_ENABLE)
+	if(!ota_is_working)
+	{
 	#if (PM_DEEPSLEEP_RETENTION_ENABLE)
 		bls_pm_setSuspendMask (SUSPEND_ADV | DEEPSLEEP_RETENTION_ADV | SUSPEND_CONN | DEEPSLEEP_RETENTION_CONN);
 	#else
 		bls_pm_setSuspendMask (SUSPEND_ADV | SUSPEND_CONN);
 	#endif
 
+	}
+
 	//do not care about keyScan/button_detect power here, if you care about this, please refer to "8258_ble_remote" demo
-	#if (UI_KEYBOARD_ENABLE)
-		if(scan_pin_need || key_not_released){
-			bls_pm_setSuspendMask (SUSPEND_DISABLE);
-		}
-	#endif
+	// #if (UI_KEYBOARD_ENABLE)
+	// 	if(scan_pin_need || key_not_released){
+	// 		bls_pm_setSuspendMask (SUSPEND_DISABLE);
+	// 	}
+	// #endif
 
 
+#if 0
 	#if (!TEST_CONN_CURRENT_ENABLE)   //test connection power, should disable deepSleep
 			if(sendTerminate_before_enterDeep == 2){  //Terminate OK
 				analog_write(USED_DEEP_ANA_REG, analog_read(USED_DEEP_ANA_REG) | CONN_DEEP_FLG);
@@ -445,6 +464,7 @@ _attribute_ram_code_ void blt_pm_proc(void)
 				}
 			}
 	#endif  //end of !TEST_CONN_CURRENT_ENABLE
+#endif  //end of BLE_APP_PM_ENABLE
 #endif  //end of BLE_APP_PM_ENABLE
 }
 
@@ -659,8 +679,9 @@ void user_init_normal(void)
 
 		LoadParam();
 
-    	storage_init();
-    	storage_test_init();
+    	// storage_init();
+    	// storage_test_init();
+		bls_ota_registerStartCmdCb(app_enter_ota_mode);
 	}
 }
 
@@ -1102,9 +1123,11 @@ void update_my_batVal(void);
 		// array_printf(test_buf, sizeof(test_buf));
 		extern u32 rev_cnt;
 		// printf("rev cnt %d", rev_cnt);
+		putchar(0x55);
+		putchar(0xaa);
 	}
-	storage_poll();        // 非阻塞轮询（默认不做长擦除）
-    storage_test_step();   // 测试写入（验证 KV/LOG 稳定性）
+	// storage_poll();        // 非阻塞轮询（默认不做长擦除）
+    // storage_test_step();   // 测试写入（验证 KV/LOG 稳定性）
 
 	{
 		// if(device_in_connection_state && clock_time_exceed(interval_update_tick, 1000*1000))
