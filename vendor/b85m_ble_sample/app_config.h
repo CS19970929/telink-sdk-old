@@ -73,6 +73,7 @@
 
 ///////////////////////// DEBUG  Configuration ////////////////////////////////////////////////
 #define DEBUG_GPIO_ENABLE								0
+#define UART_PRINT_DEBUG_ENABLE  						1
 #define	DEBUG_TERMINATE_CNT_EN							0
 
 
@@ -316,7 +317,17 @@ enum{
 
 
 
+/////////////////////////////////////// PRINT DEBUG INFO ///////////////////////////////////////
+#if (UART_PRINT_DEBUG_ENABLE)
+		//the baud rate should not bigger than 1M(system timer clock is constant 16M)
+		#define PRINT_BAUD_RATE             					1000000
+		#define DEBUG_INFO_TX_PIN           					GPIO_PB1
+		#define PULL_WAKEUP_SRC_PB1         					PM_PIN_PULLUP_10K
+		#define PB1_OUTPUT_ENABLE         						1
+        #define PB1_DATA_OUT                                    1 //must
 
+	    #include "application/print/u_printf.h"
+#endif
 
 
 
