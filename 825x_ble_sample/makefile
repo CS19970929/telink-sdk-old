@@ -10,6 +10,7 @@ RM := rm -rf
 -include sources.mk
 -include subdir.mk
 -include vendor/common/subdir.mk
+-include vendor/b85m_ble_sample/storage/subdir.mk
 -include vendor/b85m_ble_sample/subdir.mk
 -include drivers/8258/subdir.mk
 -include drivers/8258/flash/subdir.mk

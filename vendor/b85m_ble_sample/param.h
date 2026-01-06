@@ -14,6 +14,7 @@
 #ifndef __PARAM_H
 #define __PARAM_H
 
+#include "flash_store_cfg.h"
 // #include "types.h"
 
 typedef u16 UINT16;
@@ -28,11 +29,10 @@ typedef u16 UINT16;
 #endif
 
 #ifdef PARAM_SAVE_TO_FLASH
-	#define PARAM_ADDR		 0x78000			/* 0x0800C000 中间的16KB扇区用来存放参数 */
-	//#define PARAM_ADDR	 ADDR_FLASH_SECTOR_11		/* 0x080E0000 Flash最后128K扇区用来存放参数 */
+	#define PARAM_ADDR		 FLASH_ADDR_SOFT_PROTECT_BASE			/* 0x0800C000 中间的16KB扇区用来存放参数 */
 #endif
 
-#define PARAM_VER			0x0002					/* 参数版本 */
+#define PARAM_VER			0xfff0					/* 参数版本 */
 
 struct PRT_E2ROM_PARAS {
 //--------------parameters store sequence and its address allocation-----------

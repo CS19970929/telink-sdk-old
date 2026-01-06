@@ -56,6 +56,11 @@
 #include "app_config.h"
 #include "param.h"
 
+#include "storage/st_storage.h"
+#include "storage/st_test.h"
+
+
+
 
 #define 	   ADV_IDLE_ENTER_DEEP_TIME				60  //60 s
 #define 	   CONN_IDLE_ENTER_DEEP_TIME			60  //60 s
@@ -653,6 +658,9 @@ void user_init_normal(void)
 		i2c_master_test_init();
 
 		LoadParam();
+
+    	storage_init();
+    	storage_test_init();
 	}
 }
 
@@ -1095,6 +1103,8 @@ void update_my_batVal(void);
 		extern u32 rev_cnt;
 		// printf("rev cnt %d", rev_cnt);
 	}
+	storage_poll();        // 非阻塞轮询（默认不做长擦除）
+    storage_test_step();   // 测试写入（验证 KV/LOG 稳定性）
 
 	{
 		// if(device_in_connection_state && clock_time_exceed(interval_update_tick, 1000*1000))

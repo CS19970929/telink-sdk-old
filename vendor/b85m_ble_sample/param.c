@@ -52,7 +52,6 @@ void LoadParam(void)
 	/* 填充缺省参数 */
 	if (g_tParam.ParamVer != PARAM_VER)
 	{
-		flash_erase_sector(PARAM_ADDR);
 		struct PRT_E2ROM_PARAS default_param = E2P_PROTECT_DEFAULT_PRT;
 
 		g_tParam.ParamVer = PARAM_VER;
@@ -77,6 +76,7 @@ void SaveParam(void)
 {
 #ifdef PARAM_SAVE_TO_FLASH
 	/* 将全局的参数变量保存到 CPU Flash */
+	flash_erase_sector(PARAM_ADDR);
 	flash_write_page(PARAM_ADDR, sizeof(PARAM_T), (unsigned char *)&g_tParam);
 #endif
 
