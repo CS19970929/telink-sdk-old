@@ -779,10 +779,15 @@ ble_sts_t notify_big_packet(u16 conn, u16 handle, u8 *data, u16 len)
     return BLE_SUCCESS;
 }
 
+static int soc = 0;     // 当前 SOC
+int get_soc(void)
+{
+	return soc;
+}
 int simulate_soc(void)
 {
-    static int soc = 0;     // 当前 SOC
     static int dir = 1;     // 1: 增加, -1: 减少
+#if 0
     {
         soc += dir;
 
@@ -799,6 +804,8 @@ int simulate_soc(void)
             dir = 1;
         }
     }
+#endif
+	++soc;
 	return soc;
 }
 const u16 protect_para[65] = {
@@ -852,6 +859,7 @@ const u16 other_status[12] = {
 
 void notify_other_status(void)
 {
+	printf("notify_other_status");
 	int len = 3 + 12*2 + 2;
 	test_buf[0] = 0x01;
 	test_buf[1] = 0x03;
@@ -877,6 +885,7 @@ void notify_other_status(void)
 }
 void notify_protect_status(void)
 {
+	printf(" notify_protect_status");
 	int len = 3 + 21*2 + 2;
 	test_buf[0] = 0x01;
 	test_buf[1] = 0x03;
@@ -903,6 +912,7 @@ void notify_protect_status(void)
 
 void notify_soc(void)
 {
+	printf("notify_soc");
 	int len = 3 + 25*2 + 2;
 	test_buf[0] = 0x01;
 	test_buf[1] = 0x03;
@@ -929,6 +939,7 @@ void notify_soc(void)
 
 void notify_protect_prarm(void)
 {
+	printf("notify_protect_prarm");
 	int len = 3 + 65*2 + 2;
 	test_buf[0] = 0x01;
 	test_buf[1] = 0x03;
@@ -957,6 +968,7 @@ void notify_protect_prarm(void)
 void notify_votage(void)
 {
 	int len = 3 + 38*2 + 2;  // 你想测多少就填多少
+	printf("notify voltage");
 
 	static u8 vol_cnt = 0;
 	vol_cnt++;
@@ -975,7 +987,7 @@ void notify_votage(void)
 						temp = temp * 5 /32;
 						//todo flash 与soc
 						if(i == 1)
-							temp = simulate_soc();
+							temp = get_soc();
 						test_buf[3 + i * 2] =  temp >> 8;
 						test_buf[4 + i * 2] =  temp & 0xff;
 					}
@@ -1060,7 +1072,7 @@ void main_loop (void)
 	*/
 
 	_attribute_data_retention_ static u32 update_bms_info_tick = 0;
-	if(clock_time_exceed(update_bms_info_tick , 1000 * 200))
+	if(clock_time_exceed(update_bms_info_tick , 1000 * 1000))
 	{
 		update_bms_info_tick = clock_time();
 		gpio_toggle(GPIO_LED_BLUE);
@@ -1068,6 +1080,12 @@ void main_loop (void)
 		//todo 1s擦写一次flash，并notify
 void update_my_batVal(void);
 		// update_my_batVal();
+		simulate_soc();
+		// printf("device_in_connection_state && rev_master");
+		u8 test_buf[16] = {0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf};
+		// array_printf(test_buf, sizeof(test_buf));
+		extern u32 rev_cnt;
+		// printf("rev cnt %d", rev_cnt);
 	}
 
 	{
