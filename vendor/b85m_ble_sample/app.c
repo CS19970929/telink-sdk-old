@@ -54,6 +54,7 @@
 #include "application/usbstd/usbkeycode.h"
 
 #include "app_config.h"
+#include "param.h"
 
 
 #define 	   ADV_IDLE_ENTER_DEEP_TIME				60  //60 s
@@ -650,6 +651,8 @@ void user_init_normal(void)
 
 	{
 		i2c_master_test_init();
+
+		LoadParam();
 	}
 }
 
@@ -944,12 +947,17 @@ void notify_protect_prarm(void)
 	test_buf[0] = 0x01;
 	test_buf[1] = 0x03;
 	test_buf[2] = 65 * 2;
+	// u16 *p = &g_tParam.protect;
+	u16 *p = &g_tParam.protect;
 
 	size_t i;
 	for (i = 0; i < 65; i++)
 	{
-		test_buf[3 + i * 2] =  protect_para[i] >> 8;
-		test_buf[4 + i * 2] =  protect_para[i] & 0xff;
+		// test_buf[3 + i * 2] =  protect_para[i] >> 8;
+		// test_buf[4 + i * 2] =  protect_para[i] & 0xff;
+		test_buf[3 + i * 2] =  *p >> 8;
+		test_buf[4 + i * 2] =  *p & 0xff;
+		p++;
 	}
 
 	i++;
