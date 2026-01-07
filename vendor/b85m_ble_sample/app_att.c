@@ -436,6 +436,8 @@ int module_onReceiveData(void *para)
 	addr = (data[2] << 8) | data[3];
 	if(len > 0)
 	{
+		MODS_Poll(data, len);
+
 		rev_cnt++;
 		printf("rev cnt %d", rev_cnt);
 		MODS_Poll(data, len);

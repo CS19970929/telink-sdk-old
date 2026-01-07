@@ -58,6 +58,7 @@
 
 #include "storage/st_storage.h"
 #include "storage/st_test.h"
+#include "sh367309_datadeal.h"
 
 
 
@@ -539,7 +540,7 @@ void i2c_master_test_init(void)
 	//i2c clock 200K, only master need set i2c clock
 	// i2c_master_init(0x34, (unsigned char)(CLOCK_SYS_CLOCK_HZ/(4*200000)) );
 	// i2c_master_init(0x34, (unsigned char)(CLOCK_SYS_CLOCK_HZ/(4*400000)) );
-	i2c_master_init(0x34, (unsigned char)(CLOCK_SYS_CLOCK_HZ/(4*100000)));
+	i2c_master_init(AFE_ID, (unsigned char)(CLOCK_SYS_CLOCK_HZ/(4*100000)));
 
 
 }
@@ -745,6 +746,12 @@ void user_init_normal(void)
 		gpio_set_output_en(GPIO_PC3, 1);
 
 		app_timer_test_init();
+
+		gpio_set_func(GPIO_PD7, AS_GPIO) ; // PA4 默认为 GPIO 功能，可以不设置
+		gpio_set_input_en(GPIO_PD7, 0);
+		gpio_set_output_en(GPIO_PD7, 0);
+		
+		SH367309_UpdataAfeConfig();
 	}
 }
 

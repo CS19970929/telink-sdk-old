@@ -23,7 +23,7 @@
 PARAM_T g_tParam;
 
 /* 将16KB 一个扇区的空间预留出来做为参数区 For MDK */
-//const uint8_t para_flash_area[16*1024] __attribute__((at(ADDR_FLASH_SECTOR_3)));
+//const u8 para_flash_area[16*1024] __attribute__((at(ADDR_FLASH_SECTOR_3)));
 
 /*
 *********************************************************************************************************
@@ -46,7 +46,7 @@ void LoadParam(void)
 
 #ifdef PARAM_SAVE_TO_EEPROM
 	/* 读取EEPROM中的参数 */
-	ee_ReadBytes((uint8_t *)&g_tParam, PARAM_ADDR, sizeof(PARAM_T));
+	ee_ReadBytes((u8 *)&g_tParam, PARAM_ADDR, sizeof(PARAM_T));
 #endif
 
 	/* 填充缺省参数 */
@@ -82,7 +82,7 @@ void SaveParam(void)
 
 #ifdef PARAM_SAVE_TO_EEPROM
 	/* 将全局的参数变量保存到EEPROM */
-	ee_WriteBytes((uint8_t *)&g_tParam, PARAM_ADDR, sizeof(PARAM_T));
+	ee_WriteBytes((u8 *)&g_tParam, PARAM_ADDR, sizeof(PARAM_T));
 #endif
 }
 

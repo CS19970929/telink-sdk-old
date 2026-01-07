@@ -325,6 +325,7 @@ enum{
 		// #define PULL_WAKEUP_SRC_PB1         					PM_PIN_PULLUP_10K
 		// #define PB1_OUTPUT_ENABLE         						1
         // #define PB1_DATA_OUT                                    1 //must
+
 		#define PRINT_BAUD_RATE             					115200
 		#define DEBUG_INFO_TX_PIN           					GPIO_PC2
 		#define PULL_WAKEUP_SRC_PC2         					PM_PIN_PULLUP_10K
