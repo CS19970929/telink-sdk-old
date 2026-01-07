@@ -531,13 +531,13 @@ void i2c_master_test_init(void)
 	i2c_master_init(AFE_ID, (unsigned char)(CLOCK_SYS_CLOCK_HZ / (4 * 100000)));
 }
 
-volatile unsigned char i2c_master_rx_buff[43] = {0};
+volatile unsigned char i2c_master_rx_buff[0x71 - 0x40 + 1 + 1] = {0};
 void i2c_master_mainloop(void)
 {
 #define SLAVE_DMA_MODE_OTHER_DEV_WRITE (0x46)
-#define SLAVE_DMA_MODE_OTHER_DEV_READ (0x46)
+#define SLAVE_DMA_MODE_OTHER_DEV_READ (0x40)
 	u8 addr = SLAVE_DMA_MODE_OTHER_DEV_READ;
-	u8 len = 0x2A; // 手册说：长度不包含CRC
+	u8 len = (0x71 - 0x40 + 1); // 手册说：长度不包含CRC
 	// i2c_master_tx_buff[0] += 1;
 	// 825x slave dma mode, sram address(0x40000~0x4FFFF) length should be 3 byte
 	// i2c_write_series(SLAVE_DMA_MODE_OTHER_DEV_WRITE, 1, (unsigned char *)i2c_master_tx_buff, DBG_DATA_LEN);
@@ -722,12 +722,12 @@ void user_init_normal(void)
 		gpio_set_output_en(GPIO_PD7, 0);
 
 		SH367309_UpdataAfeConfig();
-		//ctl
+		// ctl
 		gpio_set_func(GPIO_PB6, AS_GPIO); // PA4 默认为 GPIO 功能，可以不设置
 		gpio_set_input_en(GPIO_PB6, 0);
 		gpio_set_output_en(GPIO_PB6, 1);
 		gpio_write(GPIO_PB6, 1);
-		//chg mos soft control
+		// chg mos soft control
 		gpio_set_func(GPIO_PA1, AS_GPIO); // PA4 默认为 GPIO 功能，可以不设置
 		gpio_set_input_en(GPIO_PA1, 0);
 		gpio_set_output_en(GPIO_PA1, 1);
@@ -1134,11 +1134,13 @@ void notify_votage(void)
 		test_buf[2] = 38 * 2;
 
 		for (size_t i = 0; i < 39; i++)
-		{
+		{ 
+			test_buf[3 + i * 2] = 61001 >> 8;
+			test_buf[4 + i * 2] = 61001 & 0xff;
 			if (i <= 13)
 			{
-				int temp = i2c_master_rx_buff[8 + 2 * i];
-				temp = temp << 8 | i2c_master_rx_buff[9 + 2 * i];
+				int temp = i2c_master_rx_buff[8 + 6 + 2 * i];
+				temp = temp << 8 | i2c_master_rx_buff[9 + 6 + 2 * i];
 				temp = temp * 5 / 32;
 				// todo flash 与soc
 				// if (i == 1)
@@ -1146,6 +1148,7 @@ void notify_votage(void)
 				test_buf[3 + i * 2] = temp >> 8;
 				test_buf[4 + i * 2] = temp & 0xff;
 			}
+
 			if (i == 32)
 			{
 				test_buf[3 + i * 2] = (3500 + vol_cnt) >> 8;
