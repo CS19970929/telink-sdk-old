@@ -406,6 +406,13 @@ void update_my_batVal(u16 val)
 	blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, BATT_LEVEL_INPUT_DP_H, &my_batVal[0], sizeof(my_batVal[0]));
 }
 
+void MODS_Poll(u8 *data, u8 len)
+{
+	array_printf(data, len);
+
+}
+
+
 
 /**
  * @brief      write callback of Attribute of TelinkSppDataClient2ServerUUID
@@ -431,7 +438,8 @@ int module_onReceiveData(void *para)
 	{
 		rev_cnt++;
 		printf("rev cnt %d", rev_cnt);
-		array_printf(data, len);
+		MODS_Poll(data, len);
+		// array_printf(data, len);
 		// if(addr == 0xd000)
 		// 	notify_votage();
 		// else if (addr == 0x2100)

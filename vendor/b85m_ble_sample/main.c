@@ -48,6 +48,7 @@
 #include "stack/ble/ble.h"
 #include "app.h"
 
+extern void app_timer_test_irq_proc(void);
 
 /**
  * @brief   IRQ handler
@@ -57,6 +58,7 @@
 _attribute_ram_code_ void irq_handler(void)
 {
 
+	app_timer_test_irq_proc();
 	irq_blt_sdk_handler ();
 
 }

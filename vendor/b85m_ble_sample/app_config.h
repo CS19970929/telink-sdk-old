@@ -47,7 +47,7 @@
 
 
 ///////////////////////// Feature Configuration////////////////////////////////////////////////
-#define BLE_APP_PM_ENABLE								1
+#define BLE_APP_PM_ENABLE								0
 #define PM_DEEPSLEEP_RETENTION_ENABLE					0
 #define TEST_CONN_CURRENT_ENABLE            			0 //test connection current, disable UI to have a pure power
 #define BLE_REMOTE_SECURITY_ENABLE      				1
@@ -320,11 +320,16 @@ enum{
 /////////////////////////////////////// PRINT DEBUG INFO ///////////////////////////////////////
 #if (UART_PRINT_DEBUG_ENABLE)
 		//the baud rate should not bigger than 1M(system timer clock is constant 16M)
+		// #define PRINT_BAUD_RATE             					115200
+		// #define DEBUG_INFO_TX_PIN           					GPIO_PB1
+		// #define PULL_WAKEUP_SRC_PB1         					PM_PIN_PULLUP_10K
+		// #define PB1_OUTPUT_ENABLE         						1
+        // #define PB1_DATA_OUT                                    1 //must
 		#define PRINT_BAUD_RATE             					115200
-		#define DEBUG_INFO_TX_PIN           					GPIO_PB1
-		#define PULL_WAKEUP_SRC_PB1         					PM_PIN_PULLUP_10K
-		#define PB1_OUTPUT_ENABLE         						1
-        #define PB1_DATA_OUT                                    1 //must
+		#define DEBUG_INFO_TX_PIN           					GPIO_PC2
+		#define PULL_WAKEUP_SRC_PC2         					PM_PIN_PULLUP_10K
+		#define PC2_OUTPUT_ENABLE         						1
+        #define PC2_DATA_OUT                                    1 //must
 
 	    #include "application/print/u_printf.h"
 #endif

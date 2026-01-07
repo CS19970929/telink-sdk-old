@@ -182,6 +182,35 @@ void app_enter_ota_mode(void)
 	// bls_ota_setTimeout(15 * 1000 * 1000); //set OTA timeout  15 seconds
 }
 
+void app_timer_test_init(void)
+{
+	//timer0 10ms interval irq
+	reg_irq_mask |= FLD_IRQ_TMR0_EN;
+	reg_tmr0_tick = 0; //clear counter
+	reg_tmr0_capt = 1 * CLOCK_SYS_CLOCK_1MS;
+	reg_tmr_sta = FLD_TMR_STA_TMR0; //clear irq status
+	reg_tmr_ctrl |= FLD_TMR0_EN;  //start timer
+
+#if 0
+	//timer1 15ms interval irq
+	reg_irq_mask |= FLD_IRQ_TMR1_EN;
+	reg_tmr1_tick = 0; //clear counter
+	reg_tmr1_capt = 15 * CLOCK_SYS_CLOCK_1MS;
+	reg_tmr_sta = FLD_TMR_STA_TMR1; //clear irq status
+	reg_tmr_ctrl |= FLD_TMR1_EN;  //start timer
+
+
+	//timer2 20ms interval irq
+	reg_irq_mask |= FLD_IRQ_TMR2_EN;
+	reg_tmr2_tick = 0; //clear counter
+	reg_tmr2_capt = 20 * CLOCK_SYS_CLOCK_1MS;
+	reg_tmr_sta = FLD_TMR_STA_TMR2; //clear irq status
+	reg_tmr_ctrl |= FLD_TMR2_EN;  //start timer
+#endif
+
+	irq_enable();
+}
+
 
 
 /**
@@ -411,6 +440,33 @@ void	task_connect (u8 e, u8 *p, int n)
 	#endif
 }
 
+int timer0_irq_cnt = 0;
+_attribute_ram_code_ void app_timer_test_irq_proc(void){
+		// gpio_toggle(GPIO_PC3);
+	if(reg_tmr_sta & FLD_TMR_STA_TMR0){
+		reg_tmr_sta = FLD_TMR_STA_TMR0; //clear irq status
+		timer0_irq_cnt ++;
+			// gpio_toggle(GPIO_PC3);
+		if(timer0_irq_cnt >= 200)
+		{
+			timer0_irq_cnt = 0;
+			gpio_toggle(GPIO_PC3);
+		}
+		// DBG_CHN0_TOGGLE;
+	}
+
+	// if(reg_tmr_sta & FLD_TMR_STA_TMR1){
+	// 	reg_tmr_sta = FLD_TMR_STA_TMR1; //clear irq status
+	// 	timer1_irq_cnt ++;
+	// 	DBG_CHN1_TOGGLE;
+	// }
+
+	// if(reg_tmr_sta & FLD_TMR_STA_TMR2){
+	// 	reg_tmr_sta = FLD_TMR_STA_TMR2; //clear irq status
+	// 	timer2_irq_cnt ++;
+	// 	DBG_CHN2_TOGGLE;
+	// }
+}
 
 /**
  * @brief      power management code for application
@@ -426,6 +482,7 @@ _attribute_ram_code_ void blt_pm_proc(void)
 		bls_pm_setSuspendMask (SUSPEND_ADV | DEEPSLEEP_RETENTION_ADV | SUSPEND_CONN | DEEPSLEEP_RETENTION_CONN);
 	#else
 		bls_pm_setSuspendMask (SUSPEND_ADV | SUSPEND_CONN);
+		// bls_pm_setSuspendMask (SUSPEND_ADV);
 	#endif
 
 	}
@@ -682,6 +739,12 @@ void user_init_normal(void)
     	// storage_init();
     	// storage_test_init();
 		bls_ota_registerStartCmdCb(app_enter_ota_mode);
+
+		gpio_set_func(GPIO_PC3, AS_GPIO) ; // PA4 默认为 GPIO 功能，可以不设置
+		gpio_set_input_en(GPIO_PC3, 0);
+		gpio_set_output_en(GPIO_PC3, 1);
+
+		app_timer_test_init();
 	}
 }
 
@@ -1109,10 +1172,11 @@ void main_loop (void)
 	*/
 
 	_attribute_data_retention_ static u32 update_bms_info_tick = 0;
-	if(clock_time_exceed(update_bms_info_tick , 1000 * 1000))
+	if(clock_time_exceed(update_bms_info_tick , 1000 * 200))
 	{
 		update_bms_info_tick = clock_time();
-		gpio_toggle(GPIO_LED_BLUE);
+		// gpio_toggle(GPIO_LED_BLUE);
+		// gpio_toggle(GPIO_PC3);
 		i2c_master_mainloop();
 		//todo 1s擦写一次flash，并notify
 void update_my_batVal(void);
@@ -1123,8 +1187,8 @@ void update_my_batVal(void);
 		// array_printf(test_buf, sizeof(test_buf));
 		extern u32 rev_cnt;
 		// printf("rev cnt %d", rev_cnt);
-		putchar(0x55);
-		putchar(0xaa);
+		// putchar(0x55);
+		// putchar(0xaa);
 	}
 	// storage_poll();        // 非阻塞轮询（默认不做长擦除）
     // storage_test_step();   // 测试写入（验证 KV/LOG 稳定性）
@@ -1156,13 +1220,12 @@ extern u16 addr;
 			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, sizeof(notify_data_test));
 		#endif
 		}
-
 	}
 
 
 	////////////////////////////////////// PM Process /////////////////////////////////
 	#if (UI_KEYBOARD_ENABLE)
-			blt_pm_proc();
+			// blt_pm_proc();
 	#elif (UI_BUTTON_ENABLE)
 			if(button_not_released){
 				bls_pm_setSuspendMask (SUSPEND_DISABLE);
