@@ -60,17 +60,29 @@ AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction = {0};
 AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
 SH367309_REG_STORE SH367309_Reg_Store;
 
-u8 CRC8cal(u8 *p, u8 Length)
-{ // look-up table calculte CRC
-    u8 crc8 = 0;
+// u8 CRC8cal(u8 *p, u8 Length)
+// { // look-up table calculte CRC
+//     u8 crc8 = 0;
 
-    for (; Length > 0; Length--)
-    {
-        crc8 = CRC8Table[crc8 ^ *p];
-        p++;
+//     for (; Length > 0; Length--)
+//     {
+//         crc8 = CRC8Table[crc8 ^ *p];
+//         p++;
+//     }
+
+//     return (crc8);
+// }
+u8 CRC8cal(const u8 *data, u32 len)
+{
+    u8 crc = 0x00;
+    for (u32 i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (u8 b = 0; b < 8; b++) {
+            if (crc & 0x80) crc = (u8)((crc << 1) ^ 0x07);
+            else           crc = (u8)(crc << 1);
+        }
     }
-
-    return (crc8);
+    return crc;
 }
 void Delay1ms(u8 delaycnt)
 {
@@ -90,7 +102,7 @@ u8 TwiWrite(u8 SlaveID, u16 WrAddr, u8 Length, u8 *WrBuf)
     // i2c_write_series(((u16)WrAddr << 8) | Length, 2, (unsigned char *)WrBuf, Length + 1);
     // i2c_write_series(((u16)WrAddr << 8) | Length, 2, (unsigned char *)TempBuf[2], 2);
     // i2c_write_series(((u16)WrAddr << 8), 1, (unsigned char *)TempBuf[2], 2);
-    i2c_write_series(WrAddr, 1, (unsigned char *)TempBuf[2], 2);
+    i2c_write_series(WrAddr, 1, (unsigned char *)&TempBuf[2], 2);
 }
 
 int Choose_Right_Value(u16 cur_Value, const u16 *AFE_list)
@@ -431,7 +443,7 @@ void Refresh_Parameters(void)
     /* 涓叉暟 */
     AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = 13 % 16;
 
-#define __CTLC__
+// #define __CTLC__
 #ifdef __CTLC__
     AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = (0xff >> 6);
 #else
@@ -503,11 +515,11 @@ void Write_Parameters(void)
     u8 temp[26] = {0};
     u8 *P = (u8 *)&AFE_ROM_PARAMETERS_Struction;
 
-    if (MTPRead(0x00, 25, temp))
+    // if (MTPRead(0x00, 25, temp))
     {
         for (i = 0; i < 25; i++)
         { // 鏈�鍚庝竴涓猅R涓嶅仛瀵规瘮
-            if (temp[i] != P[i])
+            // if (temp[i] != P[i])
             {
                 MTPWriteROM(i, 1, P + i); // 閲嶅啓EEPROM鐨勫瘎瀛樺櫒锛屼袱娆�
                 Delay1ms(40);
@@ -640,6 +652,9 @@ void SH367309_UpdataAfeConfig(void)
                 AFE_ResetFlag = 1;
             }
             SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+        }
+        else{
+            printf("[!!!] no need flash");
         }
     }
 }
