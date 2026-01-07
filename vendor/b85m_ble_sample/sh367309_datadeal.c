@@ -470,12 +470,12 @@ void Refresh_Parameters(void)
     /* 鏀剧數浣庡帇鎭㈠ */
     AFE_ROM_PARAMETERS_Struction.m06H_07H.UVR = (AFE_Parameters_RS485_Struction.u16VcellUvp_Rcv.curValue / 20) & 0x00FF;
 
-    /* 鏀剧數杩囨祦:     浜岀骇杩囨祦鍊硷紙A*10锛�/         */
-    temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // 褰撳墠瀵瑰簲澶氬皯mv
-    AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
-    /* 鏀剧數杩囨祦婊ゆ尝鏃堕棿 */
-    temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10; // 褰撳墠瀵瑰簲澶氬皯ms
-    AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, AFE_OCD1T);
+    // temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // 褰撳墠瀵瑰簲澶氬皯mv
+    // AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
+    // temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10; // 褰撳墠瀵瑰簲澶氬皯ms
+    // AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, AFE_OCD1T);
+    AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = 0;
+    AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = 0;
 
     /* 鍏呯數杩囨祦 */
     temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // 褰撳墠瀵瑰簲澶氬皯mv

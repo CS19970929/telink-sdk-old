@@ -59,6 +59,11 @@
 #include "storage/st_storage.h"
 #include "storage/st_test.h"
 #include "sh367309_datadeal.h"
+#include "stdint.h"
+#include "sci_upper.h"
+#include "SocEnhance.h"
+
+struct stCell_Info g_stCellInfoReport;
 
 #define ADV_IDLE_ENTER_DEEP_TIME 60	 // 60 s
 #define CONN_IDLE_ENTER_DEEP_TIME 60 // 60 s
@@ -532,6 +537,103 @@ void i2c_master_test_init(void)
 }
 
 volatile unsigned char i2c_master_rx_buff[0x71 - 0x40 + 1 + 1] = {0};
+
+float RSENSE = 0.001;
+// float Sh_GetCadcCurrent(u16 *current)
+typedef struct
+{
+	int32_t current_10mA; // 带符号，单位 10mA（0.01A）
+	uint32_t chg_10mA;
+	uint32_t dsg_10mA;
+	int16_t raw;
+	bool is_charge;
+	bool is_discharge;
+} sh309_current10_t;
+
+// rsense 用 “毫欧” 做整数最省事：2mΩ => 2
+// 你现在 RSENSE_UOHM=1000 相当于 1mΩ，这里就传 rsense_mOhm=1
+static inline sh309_current10_t Sh309_GetCadcCurrent_10mA_32(const uint8_t *rx_buf,
+															 uint16_t rsense_mOhm,
+															 int16_t raw_offset,
+															 bool discharge_positive)
+{
+	sh309_current10_t out = {0};
+
+	uint8_t hi = rx_buf[0x6E - 0x40];
+	uint8_t lo = rx_buf[0x6F - 0x40];
+	uint16_t u = ((uint16_t)hi << 8) | lo;
+
+	int16_t raw = (int16_t)u;
+	raw = (int16_t)(raw - raw_offset);
+	out.raw = raw;
+
+	if (rsense_mOhm == 0)
+		return out;
+
+	// 目标：current(0.01A) = raw * 200 * 100 / 21470 / (rsense_mOhm/1000)
+	//                     = raw * 200000 / 21470 / rsense_mOhm
+	//
+	// raw*200000 最大约 6,553,400,000（超过 int32）
+	// 所以拆一下：先 raw*200（<= 6,553,400，安全），再 *1000（<= 6,553,400,000，还是可能超 int32）
+	// 再聪明一点：先除 21470 再乘 1000，保证全程 32 位
+
+	int32_t a = (int32_t)raw * 200; // <= ±6,553,400
+	int32_t b = a / 21470;			// 约 ±305（粗略）
+	int32_t c = b * 1000;			// 约 ±305,000
+	int32_t cur_10mA = c / (int32_t)rsense_mOhm;
+
+	out.current_10mA = cur_10mA;
+
+	// 方向语义
+	if (discharge_positive)
+	{
+		out.is_discharge = (cur_10mA > 0);
+		out.is_charge = (cur_10mA < 0);
+	}
+	else
+	{
+		out.is_charge = (cur_10mA > 0);
+		out.is_discharge = (cur_10mA < 0);
+		// 如需统一“正=放电”，可在这里 out.current_10mA = -out.current_10mA;
+	}
+
+	if (cur_10mA >= 0)
+	{
+		out.dsg_10mA = (uint32_t)cur_10mA;
+		out.chg_10mA = 0;
+	}
+	else
+	{
+		out.chg_10mA = (uint32_t)(-cur_10mA);
+		out.dsg_10mA = 0;
+	}
+
+	return out;
+}
+
+#if 0
+float Sh_GetCadcCurrent(void)
+{
+	u8 ret = 0;
+	u16 tempvalue;
+	float current;
+
+	tempvalue = (u16)(i2c_master_rx_buff[0x6e - 0x40] << 8) + i2c_master_rx_buff[0x6f - 0x40];
+	printf("tempvalue %d", tempvalue);
+
+	if ((tempvalue & 0x8000) == 0x8000)
+	{
+		tempvalue = 0x10000 - tempvalue;
+		current = -((float)(tempvalue) * 200 / 21470.0f / RSENSE);
+	}
+	else
+	{
+		//*current = (uint16_t)((float)(tempvalue - CurrOffset) * 200 / 21470.0 / RSENSE);
+		current = ((float)(tempvalue) * 200 / 21470.0f / RSENSE);
+	}
+	return current;
+}
+#endif
 void i2c_master_mainloop(void)
 {
 #define SLAVE_DMA_MODE_OTHER_DEV_WRITE (0x46)
@@ -542,7 +644,10 @@ void i2c_master_mainloop(void)
 	// 825x slave dma mode, sram address(0x40000~0x4FFFF) length should be 3 byte
 	// i2c_write_series(SLAVE_DMA_MODE_OTHER_DEV_WRITE, 1, (unsigned char *)i2c_master_tx_buff, DBG_DATA_LEN);
 	// WaitMs(100);   //1 S
-	i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len + 1);
+	// i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len + 1);
+	i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len);
+	// array_printf(i2c_master_rx_buff, len);
+	// Sh_GetCadcCurrent();
 
 #if 0
 		/*********** copy the data read by i2c master from slave for debug  ****************/
@@ -733,7 +838,9 @@ void user_init_normal(void)
 		gpio_set_output_en(GPIO_PA1, 1);
 		gpio_write(GPIO_PA1, 1);
 
-		// InitAFE1();
+		
+		soc_param_lib_init(80);
+
 	}
 }
 
@@ -1075,6 +1182,34 @@ void notify_soc(void)
 	{
 		test_buf[3 + i * 2] = soc_para[i] >> 8;
 		test_buf[4 + i * 2] = soc_para[i] & 0xff;
+		if (i == 12 || i == 13)
+		{
+			u16 current = 0;
+
+			// 1mΩ => 1
+			sh309_current10_t cur = Sh309_GetCadcCurrent_10mA_32(i2c_master_rx_buff,
+																 1, // rsense_mOhm
+																 0,
+																 true);
+
+			// 约定：i==12 放充电电流，i==13 放放电电流（按你原逻辑）
+			if (i == 12)
+			{
+				// current = (u16)(cur.chg_10mA / 10); // 单位 0.01A
+				current = (u16)(0); // 单位 0.01A
+				g_stCellInfoReport.u16Ichg = current;
+				test_buf[3 + i * 2] = current >> 8;
+				test_buf[4 + i * 2] = current & 0xff;
+			}
+			else
+			{
+				// current = (u16)(cur.dsg_10mA /10); // 单位 0.01A
+				current = (u16)(100); // 单位 0.01A
+				g_stCellInfoReport.u16IDischg = current;
+				test_buf[3 + i * 2] = current >> 8;
+				test_buf[4 + i * 2] = current & 0xff;
+			}
+		}
 	}
 
 	i++;
@@ -1134,7 +1269,7 @@ void notify_votage(void)
 		test_buf[2] = 38 * 2;
 
 		for (size_t i = 0; i < 39; i++)
-		{ 
+		{
 			test_buf[3 + i * 2] = 61001 >> 8;
 			test_buf[4 + i * 2] = 61001 & 0xff;
 			if (i <= 13)
@@ -1238,11 +1373,8 @@ void main_loop(void)
 		void update_my_batVal(void);
 		// update_my_batVal();
 		simulate_soc();
-		// printf("device_in_connection_state && rev_master");
-		u8 test_buf[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf};
-		// array_printf(test_buf, sizeof(test_buf));
 		extern u32 rev_cnt;
-		// printf("rev cnt %d", rev_cnt);
+		APP_SOC_IntEnhance_Ctrl();
 		// putchar(0x55);
 		// putchar(0xaa);
 	}
