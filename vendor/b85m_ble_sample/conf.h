@@ -5,6 +5,9 @@
 // #include "tl_common.h"
 // #include "drivers.h"
 #include "../../common/types.h"
+#include "stdint.h"
+
+typedef uint8_t  UINT8;
 
 #define Feed_IWatchDog ;
 

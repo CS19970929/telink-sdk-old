@@ -203,7 +203,8 @@ void app_timer_test_init(void)
 	// timer0 10ms interval irq
 	reg_irq_mask |= FLD_IRQ_TMR0_EN;
 	reg_tmr0_tick = 0; // clear counter
-	reg_tmr0_capt = 1 * CLOCK_SYS_CLOCK_1MS;
+	// reg_tmr0_capt = 1 * CLOCK_SYS_CLOCK_1MS;
+	reg_tmr0_capt = 500 * CLOCK_SYS_CLOCK_1US;
 	reg_tmr_sta = FLD_TMR_STA_TMR0; // clear irq status
 	reg_tmr_ctrl |= FLD_TMR0_EN;	// start timer
 
@@ -646,8 +647,10 @@ void i2c_master_mainloop(void)
 	// WaitMs(100);   //1 S
 	// i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len + 1);
 	i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len);
+	i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)&ram_reg_309, len);
 	// array_printf(i2c_master_rx_buff, len);
 	// Sh_GetCadcCurrent();
+	App_AFEGet();	
 
 #if 0
 		/*********** copy the data read by i2c master from slave for debug  ****************/

@@ -512,6 +512,98 @@ typedef struct _AFE_REG_STORE {
 #define MTP_BFLAG2			0x71
 #define MTP_RSTSTAT			0x72
 
+typedef union __MTP_REG_BSTATUS1 {
+    UINT8 all;
+    struct _MTP_REG_BSTATUS1 {
+		UINT8 OV     			:1;		//单节过压
+		UINT8 UV     			:1;		//单节低压
+		UINT8 OCD1      		:1;		//放电过流1保护状态
+		UINT8 OCD2      		:1;		//放电过流2保护状态
+		
+		UINT8 OCC     			:1;		//充电过流保护状态
+		UINT8 SC  				:1;		//短路保护状态
+		UINT8 PF  				:1;		//二次过充电保护状态位
+		UINT8 WDT  				:1;		//看门狗溢出位
+     }bits;
+}MTP_REG_BSTATUS1;
+
+
+typedef union __MTP_REG_BSTATUS2 {
+    UINT8 all;
+    struct _MTP_REG_BSTATUS2 {
+		UINT8 UTC  				:1;		//充电低温保护状态位
+		UINT8 OTC  				:1;		//充电高温保护状态位
+		UINT8 UTD      			:1;		//放电低温保护状态位
+		UINT8 OTD   			:1;		//放电高温保护状态位
+		
+		UINT8 Rcv				:4;		//保留位
+		//UINT8 Rcv2				:8;		//保留位
+     }bits;
+}MTP_REG_BSTATUS2;
+
+
+typedef union __MTP_REG_BSTATUS3 {
+    UINT8 all;
+    struct _MTP_REG_BSTATUS3 {
+		UINT8 DSG_FET     		:1;		//放电管状态
+		UINT8 CHG_FET     		:1;		//充电管状态
+		UINT8 PCHG_FET      	:1;		//预充管状态
+		UINT8 L0V      			:1;		//低电压禁止充电状态位
+		
+		UINT8 EEPR_WR     		:1;		//EEPROM写操作状态位
+		UINT8 RCV  				:1;		//保留位
+		UINT8 DSGING  			:1;		//放电状态
+		UINT8 CHGING  			:1;		//充电状态
+     }bits;
+}MTP_REG_BSTATUS3;
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    // 0x40 ~ 0x45
+    uint8_t CONF;       // 0x40
+    uint8_t BALANCEH;   // 0x41
+    uint8_t BALANCEL;   // 0x42
+   MTP_REG_BSTATUS1 REG_BSTATUS1;		//43H
+	MTP_REG_BSTATUS2 REG_BSTATUS2;		//44H
+	MTP_REG_BSTATUS3 REG_BSTATUS3;		//45H
+
+    // 0x46 ~ 0x4B (TEMP1/2/3 raw 16bit signed)
+	uint16_t Temp1;
+	uint16_t Temp2;
+	uint16_t Temp3;
+
+    // 0x4C ~ 0x4D (CUR raw 16bit signed, CUR15 符号位：1 放电 / 0 充电):contentReference[oaicite:1]{index=1}
+	uint16_t Curl;
+
+    // 0x4E ~ 0x6D (CELL1~CELL16 raw 16bit signed)
+	uint16_t Cell[16];
+
+    // 0x6E ~ 0x6F (CADCD raw 16bit signed, CDATA.15 符号位：1 放电 / 0 充电):contentReference[oaicite:2]{index=2}
+	uint16_t Cadc;
+
+    // 0x70 ~ 0x72
+    uint8_t BFLAG1;     // 0x70
+    uint8_t BFLAG2;     // 0x71 (读后某些 FLG 自动清除，手册有描述):contentReference[oaicite:3]{index=3}
+    // uint8_t RSTSTAT;    // 0x72
+} sh367309_ram_t;
+
+#pragma pack(pop)
+
+#define SH309_RAM_START_ADDR   0x40
+#define SH309_RAM_END_ADDR     0x71
+#define SH309_RAM_LEN          (SH309_RAM_END_ADDR - SH309_RAM_START_ADDR + 1)
+
+// 编译期校验（如果你编译器不支持 static_assert，就删掉）
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+_Static_assert(sizeof(sh367309_ram_t) == SH309_RAM_LEN, "sh367309_ram_t size mismatch!");
+#endif
+
+
+
+sh367309_ram_t ram_reg_309;
+
 void SH367309_UpdataAfeConfig(void);
 
 #endif

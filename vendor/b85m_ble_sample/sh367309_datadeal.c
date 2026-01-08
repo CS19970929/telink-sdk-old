@@ -59,6 +59,7 @@ const u8 CRC8Table[] = { // 120424-1			CRC Table
 AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction = {0};
 AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
 SH367309_REG_STORE SH367309_Reg_Store;
+sh367309_ram_t ram_reg_309;
 
 // u8 CRC8cal(u8 *p, u8 Length)
 // { // look-up table calculte CRC
@@ -72,6 +73,10 @@ SH367309_REG_STORE SH367309_Reg_Store;
 
 //     return (crc8);
 // }
+static inline int16_t SH309_U8HILO_TO_S16(uint8_t h, uint8_t l)
+{
+    return (int16_t)((uint16_t)((uint16_t)h << 8) | (uint16_t)l);
+}
 u8 CRC8cal(const u8 *data, u32 len)
 {
     u8 crc = 0x00;
@@ -657,4 +662,45 @@ void SH367309_UpdataAfeConfig(void)
             printf("[!!!] no need flash");
         }
     }
+}
+
+void App_AFEGet(void) {
+
+    UpdateVoltageFromBqMaximo();
+
+    DataLoad_CellVolt();
+    //DataLoad_CellVolt_Test();
+    DataLoad_CellVoltMaxMinFind();
+    DataLoad_Temperature();
+    DataLoad_TemperatureMaxMinFind();
+	DataLoad_Current();
+}
+
+
+UINT16 U16_SwapEndian(UINT16 target) {
+	return (((uint16_t)target&0xFF00)>>8) | (((uint16_t)target&0x00FF)<<8);
+}
+UINT8 UpdateVoltageFromBqMaximo(void) {
+	UINT8 i,result = 0;
+	UINT32 u32temp = 0;
+	
+		// for(i = 0; i < SeriesNum; i++) {
+		for(i = 0; i < 10; i++) {
+			SH367309_Read_AFE1.u16VCell[i] = ((UINT32)U16_SwapEndian(ram_reg_309.Cell[i])*5>>5);		////Vcell*5/32
+		}
+
+
+		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef*U16_SwapEndian(Registers_AFE1.Temp1))/(32769 - U16_SwapEndian(Registers_AFE1.Temp1));
+		UPDNLMT16(u32temp, 65535, 0);
+		SH367309_Read_AFE1.u16TempBat[0] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
+		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef*U16_SwapEndian(Registers_AFE1.Temp2))/(32769 - U16_SwapEndian(Registers_AFE1.Temp2));
+		UPDNLMT16(u32temp, 65535, 0);
+		SH367309_Read_AFE1.u16TempBat[1] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
+		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef*U16_SwapEndian(Registers_AFE1.Temp3))/(32769 - U16_SwapEndian(Registers_AFE1.Temp3));
+		UPDNLMT16(u32temp, 65535, 0);
+		SH367309_Read_AFE1.u16TempBat[2] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
+
+		//电流要不要加滤波1s除以4，demo是这样的，现在先观察一下
+		//SH367309_Read_AFE1.i16Current = (UINT16)((UINT32)U16_SwapEndian(Registers_AFE1.Cadc)*200/(21470*RSENSE));		//TODO
+		SH367309_Read_AFE1.u16Current = U16_SwapEndian(Registers_AFE1.Cadc);
 }
