@@ -441,6 +441,7 @@ _attribute_ram_code_ void app_timer_test_irq_proc(void)
 	// gpio_toggle(GPIO_PC3);
 	if (reg_tmr_sta & FLD_TMR_STA_TMR0)
 	{
+		sif_send_data_handle();
 		reg_tmr_sta = FLD_TMR_STA_TMR0; // clear irq status
 		timer0_irq_cnt++;
 		// gpio_toggle(GPIO_PC3);

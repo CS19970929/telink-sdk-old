@@ -1,41 +1,28 @@
+// #include "SocEnhance.h"
+// #include "DataDeal.h"
+// #include "EEPROM.h"
+// #include "Sci_Upper.h"
+// #include "main.h"
 #include "conf.h"
 #include "Sci_Upper.h"
+#include "soc_module_test.h"
 
-extern struct stCell_Info g_stCellInfoReport;
-
-#define FAC_INIT_soc (60)
-#define CapacityFactory (87)
-
-#define SOC_100_VAL (4180)
-#define SOC_0_VAL (3000)
-
-typedef enum _CUR {
-CurCHG = 0, CurDSG
-}_Cur;
-
-// 80%衰减 1.25倍
-static const uint16_t dsg_rate_table[7][3] = {
-	// 电流→  target_soc  <0.2C   0.2C    0.5C    0.8C    1.2C    >1.5C
-	{3600, 45, 11},
-	{3300, 25, 12},
-	{3200, 15, 12},
-	{3150, 8, 13},
-	{3100, 4, 13},
-	{3050, 2, 14},
-	{SOC_0_VAL, 0, 20}};
-
-uint32_t ModulusSub(uint32_t Data1, uint32_t Data2)
+UINT32 ModulusSub(uint32_t Data1, uint32_t Data2)
 {
-	return (uint32_t)(Data1 > Data2 ? Data1 - Data2 : Data2 - Data1);
+	return (UINT32)(Data1 > Data2 ? Data1 - Data2 : Data2 - Data1);
 }
 
 #if 1
 
 #define SOC_FAC_VALUE 60
+#define E2P_ADDR_SOC_RECORD_backup (1024 * 3)
+#define E2P_ADDR_SOC_RECORD (E2P_ADDR_SOC_RECORD_backup - 2)
 
 #if 1
 // #define SOC_100_VAL g_tParam.other.u16Soc_V_100
 // #define SOC_0_VAL g_tParam.other.u16Soc_V_0
+#define SOC_100_VAL 	(4180)
+#define SOC_0_VAL 		(3000)
 
 #define VCELLMAX g_stCellInfoReport.u16VCellMax
 #define VCELLMIN g_stCellInfoReport.u16VCellMin
@@ -72,7 +59,7 @@ uint32_t ModulusSub(uint32_t Data1, uint32_t Data2)
 #define SOC_VIRTUAL_CURRENT_CHG (uint16_t)2 // A*10��1��2����Ϊ��0����=�ţ�0.2�Ϳ�ʼ����
 #define SOC_VIRTUAL_CURRENT_DSG (uint16_t)2 // A*10��1��2����Ϊ��0���������Ϊ0��ͬʱ����=���ж���ȥ����Ȼ�ͻῨ��DSG��������������
 
-// #define _CAL_SLOW_DOWN_CHG
+#define _CAL_SLOW_DOWN_CHG
 
 enum SOC_CALI_STATE
 {
@@ -81,89 +68,49 @@ enum SOC_CALI_STATE
 	SOC_CALI_CONT_DSG,
 };
 
+enum CAP_FULL_STATE
+{
+	CAP_FULL_INIT = 0,
+	CAP_FULL_STARTUP,
+	CAP_FULL_CALCU,
+	CAP_FULL_SUCCESS,
+	CAP_FULL_FAIL,
+};
+
 struct SOC_CALCULATE_ELEMENT
 {
-	uint32_t u32CapFactory;		// ��س�ʼ������(��������)As*10 =        Ah*3600*10
-	uint32_t u32CapChange;		// ��������仯	   As*10����������
+	UINT32 u32CapFactory; // ��س�ʼ������(��������)As*10 =        Ah*3600*10
+	UINT32 u32CapChange; // ��������仯	   As*10����������
 	uint8_t u8CHG_AHCalcu_Flag; // ��簲ʱ���ֿ�ʹ�ñ�־
 	uint8_t u8DSG_AHCalcu_Flag; // �ŵ簲ʱ���ֿ�ʹ�ñ�־
 
 	uint8_t u8SOC_Now;	   // ��ǰ���SOC     0��100 Ϊ��������ٷֱ�
-	uint32_t u32CapNow;	   // ���ʣ��������As*10
+	UINT32 u32CapNow;	   // ���ʣ��������As*10
 	uint8_t u8DSG_SOC_Int; // ѭ������ֻ��ŵ������ѷŵ����������ٷֱȣ�90%��һ��ѭ��
-	uint32_t u32Cycle_times; // ѭ������*100������ֻ��������һ������ֱ�ӵ���ȥ��������̫���EEPROM���ֲ���
-	uint32_t u32CapFull;	   // ���˥����������As*10(SOH)���ҵ���ʾSOHҪ��һ�ģ������
+	UINT32 u32Cycle_times; // ѭ������*100������ֻ��������һ������ֱ�ӵ���ȥ��������̫���EEPROM���ֲ���
+	UINT32 u32CapFull;	   // ���˥����������As*10(SOH)���ҵ���ʾSOHҪ��һ�ģ������
 
-	uint8_t u8SOC_Old;		  // ��ʼSOC    0-100 Ϊ��������ٷֱ�
-	uint32_t u32CapFull_Cal_As; // �������У�����������As*10
-
-	float delata_cap;
-	float acc_cap_K;
-	float silent_power;
+	uint8_t u8SOC_Old; // ��ʼSOC    0-100 Ϊ��������ٷֱ�
+	UINT32 u32CapFull_Cal_As; // �������У�����������As*10
 };
 
 struct SOC_CALCULATE_ELEMENT SOC_Calculate_Element;		 // �ڲ�����ṹ��
 struct SOC_CALCULATE_ELEMENT back_SOC_Calculate_Element; // �ڲ�����ṹ��
 
 enum SOC_CALI_STATE SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER; // ��ģ����������		SOC����״̬�����ǵó�ʼ��
+enum CAP_FULL_STATE CapFull_Cali_Flag = CAP_FULL_INIT;		 // �������¼���״̬����
 
-static uint8_t get_current_level(void)
+struct SOC_PARA
 {
-	// uint32_t c_rate1000 = SOC_Enhance_Element.u16_Idsg * 10 / SOC_Enhance_Element.u16_SOC_Ah;
-	// if (c_rate1000 <  200) return 0;
-	return 2;
-}
-
-static uint8_t get_voltage_level(void)
+	uint8_t soc;
+	uint8_t soh;
+};
+struct BMS_PARAM
 {
-	uint16_t v = VCELLMIN;
+	struct SOC_PARA soc_para;
+};
 
-	if (v < SOC_0_VAL)
-		return 6;
-	else if (v < 3050)
-		return 5;
-	else if (v < 3100)
-		return 4;
-	else if (v < 3150)
-		return 3;
-	else if (v < 3200)
-		return 2;
-	else if (v < 3300)
-		return 1;
-	else if (v < 3600)
-		return 0;
-	//???
-	else
-		return 0xff;
-}
-
-#if 0
-static float get_dsg_rate_permil(void)
-{
-	float cap_K = 1.0;
-	uint8_t target_soc = 0xff;
-	uint8_t voltage_level = 0xff;
-
-	voltage_level = get_voltage_level();
-	target_soc = dsg_rate_table[voltage_level][1];
-
-	if (voltage_level != 0xff && SOC_Calculate_Element.u8SOC_Now > target_soc)
-	{
-		if (g_stCellInfoReport.u16IDischg >= 10)
-			cap_K = (float)dsg_rate_table[voltage_level][get_current_level()] / 10;
-		else
-			cap_K = 1.5;
-
-		return cap_K;
-	}
-
-	return 1.0;
-}
-#endif
-static u16 get_dsg_rate_permil(void)
-{
-	return 1;
-}
+struct BMS_PARAM g_bms_param_default;
 
 uint8_t isCHG(void)
 {
@@ -198,8 +145,8 @@ static void Dec_real_soc(void)
 void set_soc_param(uint8_t _soc_val, uint16_t _cap_factory, uint8_t disp_sync_updatae)
 {
 	{
-		// soc_calculate.u32CapFactory = (uint32_t)g_tParam.other.u16Soc_Ah * 3600;
-		// soc_calculate.u32Cycle_times = (uint32_t)g_tParam.other.u16Soc_Cycle_times * 100;
+		// soc_calculate.u32CapFactory = (UINT32)g_tParam.other.u16Soc_Ah * 3600;
+		// soc_calculate.u32Cycle_times = (UINT32)g_tParam.other.u16Soc_Cycle_times * 100;
 	}
 
 	set_calsoc(_soc_val);
@@ -216,17 +163,22 @@ void soc_factory_param_init_first(void)
 {
 #if 1
 	SOC_Calculate_Element.u8SOC_Now = FAC_INIT_soc;
-	SOC_Calculate_Element.u32CapFactory = (uint32_t)CapacityFactory * 3600; // ???*10;???��??????????��????????��????????
-	SOC_Calculate_Element.u32Cycle_times = (uint32_t)1 * 100;
+	SOC_Calculate_Element.u32CapFactory = (UINT32)CapacityFactory * 3600; // ???*10;???��??????????��????????��????????
+	SOC_Calculate_Element.u32Cycle_times = (UINT32)1 * 100;
 	SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
 	SOC_Calculate_Element.u8DSG_SOC_Int = 0;
 
-	// {
-	// 	nvm_param_set(NVM_KEY_SOC, SOC_Calculate_Element.u8SOC_Now);
-	// 	nvm_param_set(NVM_KEY_DSGSOC_INT, 0);
-	// 	nvm_param_set(NVM_KEY_CYCLES, SOC_Calculate_Element.u32Cycle_times);
-	// 	nvm_param_set(NVM_KEY_CAPACITY, SOC_Calculate_Element.u32CapFactory);
-	// }
+#ifdef _DOUBLE_SOC_FUNC_
+	g_stCellInfoReport.SocElement.u16Soc = SOC_FAC_VALUE;
+	WriteEEPROM_Word_NoZone(E2P_ADDR_SOC_RECORD_backup, g_stCellInfoReport.SocElement.u16Soc);
+#endif
+
+	{
+		nvm_param_set(NVM_KEY_SOC, SOC_Calculate_Element.u8SOC_Now);
+		nvm_param_set(NVM_KEY_DSGSOC_INT, 0);
+		nvm_param_set(NVM_KEY_CYCLES, SOC_Calculate_Element.u32Cycle_times);
+		nvm_param_set(NVM_KEY_CAPACITY, SOC_Calculate_Element.u32CapFactory);
+	}
 
 	SOC_Calculate_Element.u32CapNow = get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
 	back_SOC_Calculate_Element = SOC_Calculate_Element;
@@ -236,18 +188,15 @@ void soc_factory_param_init_first(void)
 
 void soc_param_lib_init(uint8_t _soc)
 {
-	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_SOC, &SOC_Calculate_Element.u8SOC_Now);
-	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_DSGSOC_INT, &SOC_Calculate_Element.u8DSG_SOC_Int);
-	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_CYCLES, &SOC_Calculate_Element.u32Cycle_times);
-	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_CAPACITY, &SOC_Calculate_Element.u32CapFull);
-	set_calsoc(_soc);
+	nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_SOC, &SOC_Calculate_Element.u8SOC_Now);
+	nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_DSGSOC_INT, &SOC_Calculate_Element.u8DSG_SOC_Int);
+	nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_CYCLES, &SOC_Calculate_Element.u32Cycle_times);
+	nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_CAPACITY, &SOC_Calculate_Element.u32CapFull);
+
 	SOC_Calculate_Element.u32CapNow = get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
 	SOC_Calculate_Element.u32CapFactory = SOC_Calculate_Element.u32CapFull;
 
 	back_SOC_Calculate_Element = SOC_Calculate_Element;
-	// SOC_Calculate_Element.silent_power = 0.05;
-	SOC_Calculate_Element.silent_power = 0.1; // 和电流单位一样，100ma
-	SOC_Calculate_Element.acc_cap_K = 1;
 
 	SOC_Result_Pass();
 }
@@ -298,10 +247,8 @@ int8_t get_soc_from_openVol_new(uint16_t VCell)
 	return Get_OpenCircuit_Value_new(VCell);
 }
 
-#if 1
 void CorrectionTerminal_CV(enum _CUR CurrentType)
 {
-#if 0
 	static uint16_t su16_SocChgCal_L1_Tcnt = 0;
 	static uint16_t su16_SocChgCal_L2_Tcnt = 0;
 	static uint16_t su16_SocChgCal_L3_Tcnt = 0;
@@ -358,7 +305,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			// SOC_Calculate_Element.u8SOC_Now = 98;
 			SOC_Calculate_Element.u8SOC_Now = get_soc_real(); // SOC���ֲ���
 			SOC_Calculate_Element.u32CapChange = 0;			  // ������ۼ��������ɣ��������©���������1
-			SOC_Calculate_Element.u32CapNow = (uint32_t)get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
+			SOC_Calculate_Element.u32CapNow = (UINT32)get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
 		}
 #endif
 
@@ -369,88 +316,64 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 		break;
 
 	case CurDSG:
-#if 0
-		//???容量加速？？？
-		if (VCELLMIN < SOC_0_VAL + 200)
+		if (VCELLMIN <= SOC_0_VAL + 100 && VCELLMIN > SOC_0_VAL && get_soc_real() > 5)
 		{
-			if (VCELLMIN < SOC_0_VAL)
-			{
-				if (get_soc_real() > 0)
-				{
-					su16_SocDsgCal_L4_Tcnt += g_stCellInfoReport.u16IDischg;
-
-					if (su16_SocDsgCal_L4_Tcnt >= time_soc1_100_100mA_unit)
-					{
-						su16_SocDsgCal_L4_Tcnt = 0;
-						Dec_real_soc();
-					}
-				}
+			if (++su16_SocDsgCal_L1_Tcnt >= 10)
+			{ // ��һ��У׼
+				su16_SocDsgCal_L1_Tcnt = 0;
+				Dec_real_soc();
 			}
-			else if (VCELLMIN < SOC_0_VAL + 50)
-			{
-				if (get_soc_real() > 5)
-				{
-					su16_SocDsgCal_L3_Tcnt += g_stCellInfoReport.u16IDischg;
-
-					if (su16_SocDsgCal_L3_Tcnt >= time_soc1_100_100mA_unit)
-					{
-						su16_SocDsgCal_L3_Tcnt = 0;
-						Dec_real_soc();
-					}
-				}
-			}
-			else if (VCELLMIN < SOC_0_VAL + 100)
-			{
-				if (get_soc_real() > 10)
-				{
-					su16_SocDsgCal_L2_Tcnt += g_stCellInfoReport.u16IDischg;
-
-					if (su16_SocDsgCal_L2_Tcnt >= time_soc1_100_100mA_unit)
-					{
-						su16_SocDsgCal_L2_Tcnt = 0;
-						Dec_real_soc();
-					}
+		}
+		else if (VCELLMIN <= SOC_0_VAL && get_soc_real() > 0)
+		{ // ��Ҳ��֪��ΪʲôҪ5%�����룬ֱ��0%�������������гɱ�ѭ��
+			if (get_soc_real() < 5)
+			{ // �ڶ���У׼
+				if (++su16_SocDsgCal_L2_Tcnt >= 8)
+				{								// ��ƴ����������һ���ĸ�������1%����10��Ϊ8�ɡ�
+					su16_SocDsgCal_L2_Tcnt = 0; // ���Ǽ��С�����ܷž�һЩ�����ܸ�Ϊ6
+					Dec_real_soc();
 				}
 			}
 			else
-			{
-				if (get_soc_real() > 20)
-				{
-					su16_SocDsgCal_L1_Tcnt += g_stCellInfoReport.u16IDischg;
-
-					if (su16_SocDsgCal_L1_Tcnt >= time_soc1_100_100mA_unit)
-					{
-						su16_SocDsgCal_L1_Tcnt = 0;
-						Dec_real_soc();
-					}
+			{ // ��û���ˣ����кܴ��SOC
+				if (++su16_SocDsgCal_L3_Tcnt >= 4)
+				{ // ������У׼
+					su16_SocDsgCal_L3_Tcnt = 0;
+					Dec_real_soc();
 				}
 			}
+		}
 
-			if (get_soc_real() <= 1 && VCELLMIN > SOC_0_VAL)
+		if (VCELLMIN <= SOC_0_VAL - 50 && get_soc_real() > 0)
+		{
+			if (++su16_SocDsgCal_L4_Tcnt >= 2)
 			{
-				SOC_Calculate_Element.u8SOC_Now = get_soc_real(); // SOC���ֲ���
-				SOC_Calculate_Element.u32CapChange = 0;			  // ������ۼ��������ɣ��������©���������1
-				SOC_Calculate_Element.u32CapNow = (uint32_t)get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
+				su16_SocDsgCal_L4_Tcnt = 0;
+				Dec_real_soc();
 			}
+		}
+
+		if (get_soc_real() <= 1 && VCELLMIN > SOC_0_VAL)
+		{
+			// SOC_Calculate_Element.u8SOC_Now = 2;
+			SOC_Calculate_Element.u8SOC_Now = get_soc_real(); // SOC���ֲ���
+			SOC_Calculate_Element.u32CapChange = 0;			  // ������ۼ��������ɣ��������©���������1
+			SOC_Calculate_Element.u32CapNow = (UINT32)get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
 		}
 
 		su16_SocChgCal_L1_Tcnt = 0;
 		su16_SocChgCal_L2_Tcnt = 0;
 		su16_SocChgCal_L3_Tcnt = 0;
 		su16_SocChgCal_L4_Tcnt = 0;
-#endif
 		break;
 
 	default:
 		break;
 	}
-#endif
 }
-#endif
 
 void Correction_Terminal(enum _CUR CurrentType)
 {
-#if 0
 	switch (CurrentType)
 	{
 	case CurCHG:
@@ -463,12 +386,113 @@ void Correction_Terminal(enum _CUR CurrentType)
 	default:
 		break;
 	}
-#endif
+}
+
+void Correction_CapacityFull(void)
+{
+	static uint16_t su16_ChgCur_Tcnt = 0;
+	static uint16_t su16_DsgCur_Tcnt = 0;
+	static uint16_t su16_CalErr_Tcnt = 0;
+
+	switch (CapFull_Cali_Flag)
+	{
+	case CAP_FULL_INIT:
+		SOC_Calculate_Element.u32CapFull_Cal_As = 0;
+		CapFull_Cali_Flag = CAP_FULL_STARTUP;
+		break;
+
+	case CAP_FULL_STARTUP:
+		if (VCELLMIN <= SOC_0_VAL)
+		{
+			if (g_stCellInfoReport.u16IDischg <= SOC_VIRTUAL_CURRENT_DSG)
+			{
+				if (++su16_DsgCur_Tcnt > 5)
+				{
+					su16_DsgCur_Tcnt = 0;
+					CapFull_Cali_Flag = CAP_FULL_CALCU;
+					SOC_Calculate_Element.u32CapFull_Cal_As = 0; // ������ʼ������ʼ����
+				}
+			}
+			else
+			{
+				su16_DsgCur_Tcnt = 0;
+			}
+		}
+		break;
+
+	case CAP_FULL_CALCU:
+		if (VCELLMAX >= SOC_100_VAL)
+		{
+			if (g_stCellInfoReport.u16Ichg <= SOC_VIRTUAL_CURRENT_CHG && g_stCellInfoReport.u16IDischg <= SOC_VIRTUAL_CURRENT_DSG)
+			{
+				if (++su16_ChgCur_Tcnt > 5)
+				{
+					su16_ChgCur_Tcnt = 0;
+					CapFull_Cali_Flag = CAP_FULL_SUCCESS;
+				}
+			}
+			else
+			{
+				su16_ChgCur_Tcnt = 0;
+			}
+		}
+
+		if (g_stCellInfoReport.u16Ichg < SOC_VIRTUAL_CURRENT_CHG)
+		{
+			if (++su16_CalErr_Tcnt >= 5 * 60 * 10)
+			{
+				su16_CalErr_Tcnt = 0;
+				CapFull_Cali_Flag = CAP_FULL_FAIL;
+			}
+		}
+		else
+		{
+			su16_CalErr_Tcnt = 0;
+		}
+
+		if (g_stCellInfoReport.u16IDischg > SOC_VIRTUAL_CURRENT_DSG)
+		{
+			if (++su16_DsgCur_Tcnt > 5)
+			{
+				su16_DsgCur_Tcnt = 0;
+				CapFull_Cali_Flag = CAP_FULL_FAIL;
+			}
+		}
+		else
+		{
+			su16_DsgCur_Tcnt = 0;
+		}
+		break;
+
+	case CAP_FULL_SUCCESS:
+		if (SOC_Calculate_Element.u32CapFull_Cal_As == 0)
+		{
+			SOC_Calculate_Element.u32CapFull_Cal_As = SOC_Calculate_Element.u32CapFull;
+		}
+		SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFull_Cal_As; // ������������
+		SOC_Calculate_Element.u32CapFull_Cal_As = 0;
+		SOC_Calculate_Element.u32CapNow = get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
+		CapFull_Cali_Flag = CAP_FULL_STARTUP;
+		break;
+
+	case CAP_FULL_FAIL:
+		SOC_Calculate_Element.u32CapFull_Cal_As = 0;
+		CapFull_Cali_Flag = CAP_FULL_STARTUP;
+		break;
+
+	default:
+		break;
+	}
+
+	if (SOC_Calculate_Element.u32CapFull == 0)
+	{
+		SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
+	}
 }
 
 void SOC_Cont_AH_Int_CHG(void)
 {
-	uint32_t C_change_per;
+	UINT32 C_change_per;
 	static uint8_t s_u8_CHG200msCnt = 0;
 	static uint8_t s_u8_Transfer200msCnt = 0;
 #if 1
@@ -500,8 +524,8 @@ void SOC_Cont_AH_Int_CHG(void)
 	{
 		Correction_Terminal(CurCHG);
 		SOC_Calculate_Element.u8SOC_Old = get_soc_real();
-		SOC_Calculate_Element.u32CapChange += (uint32_t)g_stCellInfoReport.u16Ichg * 1; // As*10*100(����Ч��100)
-		SOC_Calculate_Element.u32CapNow += (uint32_t)g_stCellInfoReport.u16Ichg * 1;	  // ʣ������ʵʱ����
+		SOC_Calculate_Element.u32CapChange += (UINT32)g_stCellInfoReport.u16Ichg * 1; // As*10*100(����Ч��100)
+		SOC_Calculate_Element.u32CapNow += (UINT32)g_stCellInfoReport.u16Ichg * 1;	  // ʣ������ʵʱ����
 
 		if (SOC_Calculate_Element.u32CapNow > SOC_Calculate_Element.u32CapFull)
 			SOC_Calculate_Element.u32CapNow = SOC_Calculate_Element.u32CapFull;
@@ -512,13 +536,13 @@ void SOC_Cont_AH_Int_CHG(void)
 		SOC_Calculate_Element.u32CapChange = (((SOC_Calculate_Element.u32CapChange * 100) % SOC_Calculate_Element.u32CapFull) + 50) / 100;
 		SOC_Calculate_Element.u8CHG_AHCalcu_Flag = 0;
 
-		SOC_Calculate_Element.u32CapFull_Cal_As += (uint32_t)g_stCellInfoReport.u16Ichg * 1;
+		SOC_Calculate_Element.u32CapFull_Cal_As += (UINT32)g_stCellInfoReport.u16Ichg * 1;
 	}
 }
 
 void SOC_Cont_AH_Int_DSG(void)
 {
-	uint32_t C_change_per;
+	UINT32 C_change_per;
 	static uint8_t s_u8_DSG200msCnt = 0;
 	static uint8_t s_u8_Transfer200msCnt = 0;
 #if 1
@@ -547,15 +571,11 @@ void SOC_Cont_AH_Int_DSG(void)
 
 	if (SOC_Calculate_Element.u8DSG_AHCalcu_Flag)
 	{
-		SOC_Calculate_Element.acc_cap_K = get_dsg_rate_permil();
-		// Correction_Terminal(CurDSG);
-		// todo 怎么处理容量与soc，静态功耗在哪里处理？
+		Correction_Terminal(CurDSG);
+
 		SOC_Calculate_Element.u8SOC_Old = get_soc_real();
-		// SOC_Calculate_Element.u32CapChange += (uint32_t)g_stCellInfoReport.u16IDischg * 1;
-		// SOC_Calculate_Element.u32CapNow -= (uint32_t)g_stCellInfoReport.u16IDischg * 1;
-		SOC_Calculate_Element.delata_cap = SOC_Calculate_Element.acc_cap_K * g_stCellInfoReport.u16IDischg * 1;
-		SOC_Calculate_Element.u32CapChange += (uint32_t)SOC_Calculate_Element.delata_cap;
-		SOC_Calculate_Element.u32CapNow -= (uint32_t)SOC_Calculate_Element.delata_cap;
+		SOC_Calculate_Element.u32CapChange += (UINT32)g_stCellInfoReport.u16IDischg * 1;
+		SOC_Calculate_Element.u32CapNow -= (UINT32)g_stCellInfoReport.u16IDischg * 1;
 
 		if (SOC_Calculate_Element.u32CapNow > SOC_Calculate_Element.u32CapFull)
 			SOC_Calculate_Element.u32CapNow = 0;
@@ -610,8 +630,6 @@ void SOC_State_Transfer(void)
 	}
 	else
 	{
-		SOC_Calculate_Element.acc_cap_K = 1;
-
 		if (++s_u8SOC_State_OCV >= 3)
 		{
 			s_u8SOC_State_OCV = 0;
@@ -627,8 +645,8 @@ void SOC_Update_param(void)
 {
 #if 0
 	SOC_Calculate_Element.u8DSG_SOC_Int = 0;
-	SOC_Calculate_Element.u32CapFactory = (uint32_t)g_tParam.other.u16Soc_Ah * 3600;
-	SOC_Calculate_Element.u32Cycle_times = (uint32_t)g_tParam.other.u16Soc_Cycle_times * 100;
+	SOC_Calculate_Element.u32CapFactory = (UINT32)g_tParam.other.u16Soc_Ah * 3600;
+	SOC_Calculate_Element.u32Cycle_times = (UINT32)g_tParam.other.u16Soc_Cycle_times * 100;
 	// ����SOC_Calculate_Element.u32CapFactory�Ѿ���ʼ��
 	SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
 
@@ -639,10 +657,23 @@ void SOC_Update_param(void)
 
 void SOC_Result_Pass(void)
 {
+#ifndef _DOUBLE_SOC_FUNC_
 	g_stCellInfoReport.SocElement.u16Soc = get_soc_real();
 	g_stCellInfoReport.SocElement.u16CapacityNow = SOC_Calculate_Element.u32CapNow * 1 / 360;
+#else
+	g_stCellInfoReport.real_now_Capacity = SOC_Calculate_Element.u32CapNow * 1 / 360;
+#endif
 
-	// todo soh algo
+	// if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
+	// {
+	// 	g_stCellInfoReport.SocElement.u16Soh = 100;
+	// }
+	// else
+	// {
+	// 	g_stCellInfoReport.SocElement.u16Soh = (uint8_t)((100 * SOC_Calculate_Element.u32CapFull / SOC_Calculate_Element.u32CapFactory) & 0xFF);
+	// }
+
+	//todo soh algo
 	g_stCellInfoReport.SocElement.u16Soh = 100;
 
 	g_stCellInfoReport.SocElement.u16CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
@@ -650,62 +681,280 @@ void SOC_Result_Pass(void)
 	g_stCellInfoReport.SocElement.u16Cycle_times = SOC_Calculate_Element.u32Cycle_times / 100;
 }
 
+void bmsParam_save(void)
+{
+	uint8_t soc_disp = get_dispsoc();
+
+	if (g_bms_param_default.soc_para.soc != soc_disp)
+	{
+		g_bms_param_default.soc_para.soc = soc_disp;
+		WriteEEPROM_Word_NoZone(E2P_ADDR_SOC_RECORD_backup, g_stCellInfoReport.SocElement.u16Soc);
+	}
+}
+
+#define LARGE_CURR 500
+#define LARGE_CURR2 100
+
+#define N 7
+
+static uint8_t ocv_state = 0;
+static uint8_t ocv_cnt = 0;
+static uint8_t arr_soc[N] = {0, 0, 0, 0, 0};
+
+static uint8_t large_curr_flag = 0;
+
+static uint32_t ocv200mscnt = 0;
+static uint32_t ocv200mscnt_large_curr = 0;
+
+void PRE_OCV(void)
+{
+#define OCV_CURRENT_THRESHOLD (10)
+	// static uint8_t state_pre_ocv = 0;
+
+	if (g_stCellInfoReport.u16Ichg >= LARGE_CURR || g_stCellInfoReport.u16IDischg >= LARGE_CURR)
+	{
+		large_curr_flag = 1;
+
+		ocv200mscnt = 0;
+		ocv200mscnt_large_curr = 0;
+
+		return;
+	}
+	else if (g_stCellInfoReport.u16Ichg >= LARGE_CURR2 || g_stCellInfoReport.u16IDischg >= LARGE_CURR2)
+	{
+		large_curr_flag = 2;
+
+		ocv200mscnt = 0;
+		ocv200mscnt_large_curr = 0;
+
+		return;
+	}
+
+	if (!large_curr_flag)
+	{
+		//!!! С����ֵ�ĵ�����ʵʱУ׼����soc�ϲ�ȥ,��ȷ�ϣ��϶��䲻��ȥ �������ǰ�
+		if (g_stCellInfoReport.u16Ichg <= OCV_CURRENT_THRESHOLD && g_stCellInfoReport.u16IDischg <= OCV_CURRENT_THRESHOLD)
+		{
+			if (++ocv200mscnt >= g_debug.real_ocv_start_delay_time)
+			{
+				log_a("start real ocv cali");
+				ocv200mscnt = 0;
+				ocv_state = 1;
+			}
+		}
+		else
+		{
+			ocv200mscnt = 0;
+		}
+	}
+	else if (large_curr_flag == 1)
+	{
+		if (g_stCellInfoReport.u16Ichg <= OCV_CURRENT_THRESHOLD && g_stCellInfoReport.u16IDischg <= OCV_CURRENT_THRESHOLD)
+		{
+			// 3��Сʱ������
+			if (++ocv200mscnt_large_curr >= 5 * 60 * 180)
+			{
+				ocv200mscnt_large_curr = 0;
+
+				large_curr_flag = 0;
+
+				// ocv_state = 1;
+			}
+		}
+		//!!!!!!!!!!!!???!!!!!!!!!!!!
+		// else
+		// {
+		// 	ocv200mscnt = 0;
+		// }
+	}
+	else if (large_curr_flag == 2)
+	{
+		if (g_stCellInfoReport.u16Ichg <= OCV_CURRENT_THRESHOLD && g_stCellInfoReport.u16IDischg <= OCV_CURRENT_THRESHOLD && VCELLMIN <= OCV_VOL_ENABLE)
+		{
+			if (++ocv200mscnt_large_curr >= 5 * 60 * 60)
+			{
+				ocv200mscnt_large_curr = 0;
+
+				large_curr_flag = 0;
+
+				// ocv_state = 1;
+				// log_w("large curr ocv cali real soc-> %d\n", soc_calculate.u8SOC_Now);
+			}
+		}
+	}
+}
+uint8_t get_ocv_cali(uint8_t *arr_soc)
+{
+	uint16_t sum = 0;
+	uint8_t temp = 0;
+	uint8_t ocv_soc = 0;
+
+	char count, i, j;
+	for (j = 0; j < (N - 1); j++)
+	{
+		for (i = 0; i < (N - j - 1); i++)
+		{
+			if (arr_soc[i] > arr_soc[i + 1])
+			{
+				temp = arr_soc[i];
+				arr_soc[i] = arr_soc[i + 1];
+				arr_soc[i + 1] = temp;
+			}
+		}
+	}
+// #ifdef __test__
+#if 1
+	uint8_t k = 0;
+
+	log_e("arr_soc[]: ");
+	for (k = 0; k < N; k++)
+	{
+		log_w("%d ", arr_soc[k]);
+	}
+#endif
+	if (ModulusSub(arr_soc[N - 1], arr_soc[0]) > 10)
+	{
+		log_e("maxsoc %d minsoc %d", arr_soc[N - 1], arr_soc[0]);
+		goto _err;
+	}
+	for (count = 1; count < N - 1; count++)
+	{
+		sum += arr_soc[count];
+	}
+	ocv_soc = (uint8_t)(sum / (N - 2));
+	log_e("ocv cali soc->%d", ocv_soc);
+
+	return ocv_soc;
+
+_err:
+	return get_dispsoc();
+}
+
+void SOC_OCV_Fix2(void)
+{
+	static uint8_t ocv_soc = 0;
+
+	// static uint8_t ocv_soc_record[10];
+	// static bool is_firstOCV = true;
+
+	if (VCELLMIN > OCV_VOL_ENABLE)
+	{
+		ocv_state = 0;
+		ocv_cnt = 0;
+		ocv200mscnt = 0;
+		ocv200mscnt_large_curr = 0;
+		return;
+	}
+	if (g_stCellInfoReport.u16Ichg > 10 || g_stCellInfoReport.u16IDischg > 10 || g_debug.people_set)
+	{
+		if (g_debug.people_set)
+			g_debug.people_set = false;
+
+		ocv_state = 0;
+		ocv_cnt = 0;
+
+		// return;
+	}
+	switch (ocv_state)
+	{
+	case 0:
+	{
+		PRE_OCV();
+		break;
+	}
+	case 1:
+	{
+		arr_soc[ocv_cnt] = get_soc_from_openVol_onlyDec_new(VCELLMIN);
+
+		if (++ocv_cnt >= N)
+		{
+			ocv_cnt = 0;
+			// ocv_state = 2;
+			ocv_state = 0;
+
+			ocv_soc = get_ocv_cali(arr_soc);
+
+			// todo ���Ŷ�confidense �б�
+			set_soc_param(ocv_soc, 1, 0);
+		}
+		break;
+	}
+#if 0
+	case 2:
+	{
+		// todo ??????????????????????????????��?????soc?��??????��eeprom????
+		// todo ???��????????��soc eeprom
+
+		if (ModulusSub(ocv_soc, SOC_Calculate_Element.u8SOC_Now) > 3)
+		{
+			set_calsoc(ocv_soc);
+			log_e("ocv success");
+		}
+		else
+		{
+			log_e("ocv soc, soc_now err < 3, not update ocv_soc:%d, soc_now:%d", ocv_soc, SOC_Calculate_Element.u8SOC_Now);
+		}
+
+		break;
+	}
+#endif
+	default:
+		break;
+	}
+}
+
 void SOC_EEPROM_Deal_Monitor(void)
 {
+	// static uint8_t back_soc = 0;
+
 	if (back_SOC_Calculate_Element.u8SOC_Now != SOC_Calculate_Element.u8SOC_Now)
 	{
 		back_SOC_Calculate_Element.u8SOC_Now = SOC_Calculate_Element.u8SOC_Now;
-		// nvm_param_set(NVM_KEY_SOC, SOC_Calculate_Element.u8SOC_Now);
+		nvm_param_set(NVM_KEY_SOC, SOC_Calculate_Element.u8SOC_Now);
 		// printf("soc %d", SOC_Calculate_Element.u8SOC_Now);
 	}
 	if (back_SOC_Calculate_Element.u8DSG_SOC_Int != SOC_Calculate_Element.u8DSG_SOC_Int)
 	{
 		back_SOC_Calculate_Element.u8DSG_SOC_Int = SOC_Calculate_Element.u8DSG_SOC_Int;
-		// nvm_param_set(NVM_KEY_DSGSOC_INT, SOC_Calculate_Element.u8DSG_SOC_Int);
+		nvm_param_set(NVM_KEY_DSGSOC_INT, SOC_Calculate_Element.u8DSG_SOC_Int);
 		// printf("dsg soc int %d", SOC_Calculate_Element.u8DSG_SOC_Int);
 	}
 	if (back_SOC_Calculate_Element.u32Cycle_times != SOC_Calculate_Element.u32Cycle_times)
 	{
 		back_SOC_Calculate_Element.u32Cycle_times = SOC_Calculate_Element.u32Cycle_times;
-		// nvm_param_set(NVM_KEY_CYCLES, SOC_Calculate_Element.u32Cycle_times);
+		nvm_param_set(NVM_KEY_CYCLES, SOC_Calculate_Element.u32Cycle_times);
 		// nvm_param_set(NVM_KEY_CAPACITY, SOC_Calculate_Element.u32CapFactory);
 	}
 	// if()
 }
 
-extern enum status_sys sys_status;
 void soc_cali(void)
 {
-	static uint8_t dsg_soc0_delay = 0;
 #if 0
+
 #ifdef _SOC_OCV_Fix2_func_
 	SOC_OCV_Fix2();
 #endif
+
 #endif
-	// //???只触发一次
-	// if ((sys_status == s_CHG) && (g_stCellInfoReport.u16VCellTotle * 10 >= 4000 * SNum) && (isCOV || g_stCellInfoReport.u16VCellMax >= SOC_100_VAL) && g_stCellInfoReport.u16VCellMin >= 4000)
-	// {
-	// 	set_soc_param(100, 1, 1);
-	// }
-	// // else if ((g_stCellInfoReport.u16VCellTotle * 10 <= 2900 * SNum) && (gcel))
-	// else if ((sys_status == s_DSG) && (g_stCellInfoReport.u16VCellMin <= SOC_0_VAL) && (g_stCellInfoReport.u16VCellMin >= 2000))
-	// {
-	// 	if(++dsg_soc0_delay >= (5 * 10))
-	// 	{
-	// 		dsg_soc0_delay = 0;
-	// 		set_soc_param(0, 1, 1);
-	// 	}
-	// }
-	// else
-	// {
-	// 	dsg_soc0_delay = 0;
-	// }
+	if (isCHG())
+	{
+		if (VCELLMAX >= SOC_100_VAL)
+		{
+			set_soc_param(100, 1, 1);
+		}
+	}
+	if (isDSG())
+	{
+		if (VCELLMIN <= SOC_0_VAL)
+		{
+			set_soc_param(0, 1, 1);
+		}
+	}
 }
 
 void APP_SOC_IntEnhance_Ctrl()
 {
-	static uint16_t silent_power_delay = 0;
-
 	switch (SOC_Cali_Flag)
 	{
 	case SOC_CALI_STATE_TRANSFER:
@@ -721,30 +970,10 @@ void APP_SOC_IntEnhance_Ctrl()
 		break;
 	}
 
-	// if (sys_status != s_CHG)
-	// {
-	// 	if (SOC_Calculate_Element.u8SOC_Now < 100)
-	// 	{
-	// 		if (++silent_power_delay >= 5 * 60)
-	// 		{
-	// 			uint32_t C_change_per;
-	// 			silent_power_delay = 0;
-
-	// 			SOC_Calculate_Element.u8SOC_Old = get_soc_real();
-
-	// 			SOC_Calculate_Element.delata_cap = SOC_Calculate_Element.silent_power * 1 * 60;
-	// 			SOC_Calculate_Element.u32CapChange += (uint32_t)SOC_Calculate_Element.delata_cap;
-	// 			SOC_Calculate_Element.u32CapNow -= (uint32_t)SOC_Calculate_Element.delata_cap;
-
-	// 			if (SOC_Calculate_Element.u32CapNow > SOC_Calculate_Element.u32CapFactory)
-	// 				SOC_Calculate_Element.u32CapNow = 0;
-	// 		}
-	// 	}
-	// }
-
-	soc_cali();
+	// soc_cali();
 
 	SOC_EEPROM_Deal_Monitor();
+	// Correction_CapacityFull();
 
 	SOC_Result_Pass();
 }
