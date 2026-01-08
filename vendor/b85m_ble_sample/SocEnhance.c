@@ -5,7 +5,9 @@
 // #include "main.h"
 #include "conf.h"
 #include "Sci_Upper.h"
-#include "soc_module_test.h"
+
+extern struct stCell_Info g_stCellInfoReport;
+// #include "soc_module_test.h"
 
 UINT32 ModulusSub(uint32_t Data1, uint32_t Data2)
 {
@@ -112,6 +114,11 @@ struct BMS_PARAM
 
 struct BMS_PARAM g_bms_param_default;
 
+void set_dispsoc(uint8_t soc)
+{
+	g_stCellInfoReport.SocElement.u16Soc = soc;
+}
+
 uint8_t isCHG(void)
 {
 	return g_stCellInfoReport.u16Ichg > SOC_VIRTUAL_CURRENT_CHG ? 1 : 0;
@@ -128,7 +135,10 @@ uint8_t get_soc_real(void)
 void set_calsoc(uint8_t _soc)
 {
 	SOC_Calculate_Element.u8SOC_Now = _soc;
-	SOC_Calculate_Element.u32CapNow = get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
+	SOC_Calculate_Element.u32CapFactory = (UINT32)CapacityFactory * 3600; // ???*10;???��??????????��????????��????????
+	SOC_Calculate_Element.u32Cycle_times = (UINT32)1 * 100;
+	SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
+	SOC_Calculate_Element.u8DSG_SOC_Int = 0;
 }
 
 static void Inc_real_soc(void)
@@ -168,17 +178,12 @@ void soc_factory_param_init_first(void)
 	SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
 	SOC_Calculate_Element.u8DSG_SOC_Int = 0;
 
-#ifdef _DOUBLE_SOC_FUNC_
-	g_stCellInfoReport.SocElement.u16Soc = SOC_FAC_VALUE;
-	WriteEEPROM_Word_NoZone(E2P_ADDR_SOC_RECORD_backup, g_stCellInfoReport.SocElement.u16Soc);
-#endif
-
-	{
-		nvm_param_set(NVM_KEY_SOC, SOC_Calculate_Element.u8SOC_Now);
-		nvm_param_set(NVM_KEY_DSGSOC_INT, 0);
-		nvm_param_set(NVM_KEY_CYCLES, SOC_Calculate_Element.u32Cycle_times);
-		nvm_param_set(NVM_KEY_CAPACITY, SOC_Calculate_Element.u32CapFactory);
-	}
+	// {
+	// 	nvm_param_set(NVM_KEY_SOC, SOC_Calculate_Element.u8SOC_Now);
+	// 	nvm_param_set(NVM_KEY_DSGSOC_INT, 0);
+	// 	nvm_param_set(NVM_KEY_CYCLES, SOC_Calculate_Element.u32Cycle_times);
+	// 	nvm_param_set(NVM_KEY_CAPACITY, SOC_Calculate_Element.u32CapFactory);
+	// }
 
 	SOC_Calculate_Element.u32CapNow = get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
 	back_SOC_Calculate_Element = SOC_Calculate_Element;
@@ -188,10 +193,11 @@ void soc_factory_param_init_first(void)
 
 void soc_param_lib_init(uint8_t _soc)
 {
-	nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_SOC, &SOC_Calculate_Element.u8SOC_Now);
-	nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_DSGSOC_INT, &SOC_Calculate_Element.u8DSG_SOC_Int);
-	nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_CYCLES, &SOC_Calculate_Element.u32Cycle_times);
-	nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_CAPACITY, &SOC_Calculate_Element.u32CapFull);
+	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_SOC, &SOC_Calculate_Element.u8SOC_Now);
+	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_DSGSOC_INT, &SOC_Calculate_Element.u8DSG_SOC_Int);
+	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_CYCLES, &SOC_Calculate_Element.u32Cycle_times);
+	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_CAPACITY, &SOC_Calculate_Element.u32CapFull);
+	set_calsoc(_soc);
 
 	SOC_Calculate_Element.u32CapNow = get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
 	SOC_Calculate_Element.u32CapFactory = SOC_Calculate_Element.u32CapFull;
@@ -692,6 +698,7 @@ void bmsParam_save(void)
 	}
 }
 
+#if 0
 #define LARGE_CURR 500
 #define LARGE_CURR2 100
 
@@ -902,6 +909,7 @@ void SOC_OCV_Fix2(void)
 		break;
 	}
 }
+#endif
 
 void SOC_EEPROM_Deal_Monitor(void)
 {
@@ -910,19 +918,19 @@ void SOC_EEPROM_Deal_Monitor(void)
 	if (back_SOC_Calculate_Element.u8SOC_Now != SOC_Calculate_Element.u8SOC_Now)
 	{
 		back_SOC_Calculate_Element.u8SOC_Now = SOC_Calculate_Element.u8SOC_Now;
-		nvm_param_set(NVM_KEY_SOC, SOC_Calculate_Element.u8SOC_Now);
+		// nvm_param_set(NVM_KEY_SOC, SOC_Calculate_Element.u8SOC_Now);
 		// printf("soc %d", SOC_Calculate_Element.u8SOC_Now);
 	}
 	if (back_SOC_Calculate_Element.u8DSG_SOC_Int != SOC_Calculate_Element.u8DSG_SOC_Int)
 	{
 		back_SOC_Calculate_Element.u8DSG_SOC_Int = SOC_Calculate_Element.u8DSG_SOC_Int;
-		nvm_param_set(NVM_KEY_DSGSOC_INT, SOC_Calculate_Element.u8DSG_SOC_Int);
+		// nvm_param_set(NVM_KEY_DSGSOC_INT, SOC_Calculate_Element.u8DSG_SOC_Int);
 		// printf("dsg soc int %d", SOC_Calculate_Element.u8DSG_SOC_Int);
 	}
 	if (back_SOC_Calculate_Element.u32Cycle_times != SOC_Calculate_Element.u32Cycle_times)
 	{
 		back_SOC_Calculate_Element.u32Cycle_times = SOC_Calculate_Element.u32Cycle_times;
-		nvm_param_set(NVM_KEY_CYCLES, SOC_Calculate_Element.u32Cycle_times);
+		// nvm_param_set(NVM_KEY_CYCLES, SOC_Calculate_Element.u32Cycle_times);
 		// nvm_param_set(NVM_KEY_CAPACITY, SOC_Calculate_Element.u32CapFactory);
 	}
 	// if()

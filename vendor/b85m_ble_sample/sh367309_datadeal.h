@@ -512,51 +512,6 @@ typedef struct _AFE_REG_STORE {
 #define MTP_BFLAG2			0x71
 #define MTP_RSTSTAT			0x72
 
-typedef union __MTP_REG_BSTATUS1 {
-    UINT8 all;
-    struct _MTP_REG_BSTATUS1 {
-		UINT8 OV     			:1;		//单节过压
-		UINT8 UV     			:1;		//单节低压
-		UINT8 OCD1      		:1;		//放电过流1保护状态
-		UINT8 OCD2      		:1;		//放电过流2保护状态
-		
-		UINT8 OCC     			:1;		//充电过流保护状态
-		UINT8 SC  				:1;		//短路保护状态
-		UINT8 PF  				:1;		//二次过充电保护状态位
-		UINT8 WDT  				:1;		//看门狗溢出位
-     }bits;
-}MTP_REG_BSTATUS1;
-
-
-typedef union __MTP_REG_BSTATUS2 {
-    UINT8 all;
-    struct _MTP_REG_BSTATUS2 {
-		UINT8 UTC  				:1;		//充电低温保护状态位
-		UINT8 OTC  				:1;		//充电高温保护状态位
-		UINT8 UTD      			:1;		//放电低温保护状态位
-		UINT8 OTD   			:1;		//放电高温保护状态位
-		
-		UINT8 Rcv				:4;		//保留位
-		//UINT8 Rcv2				:8;		//保留位
-     }bits;
-}MTP_REG_BSTATUS2;
-
-
-typedef union __MTP_REG_BSTATUS3 {
-    UINT8 all;
-    struct _MTP_REG_BSTATUS3 {
-		UINT8 DSG_FET     		:1;		//放电管状态
-		UINT8 CHG_FET     		:1;		//充电管状态
-		UINT8 PCHG_FET      	:1;		//预充管状态
-		UINT8 L0V      			:1;		//低电压禁止充电状态位
-		
-		UINT8 EEPR_WR     		:1;		//EEPROM写操作状态位
-		UINT8 RCV  				:1;		//保留位
-		UINT8 DSGING  			:1;		//放电状态
-		UINT8 CHGING  			:1;		//充电状态
-     }bits;
-}MTP_REG_BSTATUS3;
-
 #pragma pack(push, 1)
 
 typedef struct
@@ -591,6 +546,13 @@ typedef struct
 
 #pragma pack(pop)
 
+struct SH367309_Read {			/* AD Read	*/
+	UINT16		u16VCell[16];   // mv
+	UINT16		u16TempBat[3];					
+	UINT32		u32VBat;       	// mv
+	UINT16      u16Current;     // mA
+};
+
 #define SH309_RAM_START_ADDR   0x40
 #define SH309_RAM_END_ADDR     0x71
 #define SH309_RAM_LEN          (SH309_RAM_END_ADDR - SH309_RAM_START_ADDR + 1)
@@ -600,9 +562,110 @@ typedef struct
 _Static_assert(sizeof(sh367309_ram_t) == SH309_RAM_LEN, "sh367309_ram_t size mismatch!");
 #endif
 
+enum TempArray {
+	AFE1_TEMP1 = 0,
+	AFE1_TEMP2,
+	AFE1_TEMP3,
+	AFE2_TEMP1,
+	AFE2_TEMP2,
+	AFE2_TEMP3,
+	ENV_TEMP1,
+	ENV_TEMP2,
+	ENV_TEMP3,
+	MOS_TEMP1,
+	TEMP_NUM
+};
+
+#define SYSKMAX   		((UINT16)1536)      // 1.5
+#define SYSKDEFAULT		((UINT16)1024)      // 1
+#define SYSKMIN   		((UINT16)512)       // 0.5
+
+#define SYSBMAX   		((INT16)30000)      // 30
+#define SYSBDEFAULT		((INT16)0)      	// 0
+#define SYSBMIN   		((INT16)-30000)     // -30
 
 
-sh367309_ram_t ram_reg_309;
+union System_Status {				//TODO�����⣬Heat��Cool��û��
+    UINT32 all;
+    struct System_Status_Flag {
+		UINT8 b1StartUpBMS			:1;		//BMS��һ�ο�����־λ����ʼΪ1��ȷ���ܴ򿪹�����Ϊϵͳ��ʼ�����				//�ڶ���8λ
+		UINT8 b1Status_MOS_PRE      :1;		//Ԥ��MOS�ܹ���״̬
+		UINT8 b1Status_MOS_CHG      :1;		//���MOS�ܹ���״̬
+		UINT8 b1Status_MOS_DSG      :1;		//�ŵ�MOS�ܹ���״̬
+
+		UINT8 b1Status_Relay_PRE    :1;		//Ԥ��̵�������״̬
+		UINT8 b1Status_Relay_CHG    :1;		//�ֿڳ��̵�������״̬
+		UINT8 b1Status_Relay_DSG    :1;		//�ֿڷŵ�̵�������״̬
+		UINT8 b1Status_Relay_MAIN   :1;		//ͬ�����̵�������״̬
+
+		UINT8 b1Status_Heat         :1;		//���ȹ���״̬					//��һ��8λ
+		UINT8 b1Status_Cool         :1;		//���书��״̬
+		UINT8 b1Status_AFE1         :1;		//AFE1״̬
+		UINT8 b1Status_AFE2	        :1;		//AFE2״̬
+
+		UINT8 b1Status_Balance		:1;		//���⹦��״̬
+		UINT8 b1Status_ToSleep		:1;		//������������״̬
+		UINT8 b1Status_BnCloseIO	:1;		//�������MOS�رձ�־λ
+		UINT8 b1Status_HeatCloseIO	:1;		//����ʱ�ر�MosRelay
+		
+		UINT8 b1Status_SysLimits	:1;		//res						//���ĸ�8λ
+		UINT8 b1Status_CBCCloseIO	:1;		//res
+		UINT8 b1Status_DriverExtCtrl:1;		//����תΪ�ⲿ���ƣ�����������ã�����
+		UINT8 bRcved6				:1;		//res
+
+		UINT8 b4Status_ProjectVer	:4;		//��¼һЩ��Ŀ��Ϣ��Ŀǰ���ߴ���Ϊ1�����Ϊ0
+		
+		UINT8 bRcved11				:8;		//res						//������8λ
+     }bits;
+};
+enum FaultFlag {
+	CellOvp_First = 1,
+	CellUvp_First,
+	BatOvp_First,
+	BatUvp_First,
+	IchgOcp_First,
+	IdischgOcp_First,
+	CellChgOTp_First,
+	CellChgUTp_First,
+	CellDsgOTp_First,
+	CellDsgUTp_First,
+	MosOTp_First,
+	VdeltaOvp_First,
+	CellSocUp_First,
+	
+	CellOvp_Second,
+	CellUvp_Second,
+	BatOvp_Second,
+	BatUvp_Second,
+	IchgOcp_Second,
+	IdischgOcp_Second,
+	CellChgOTp_Second,
+	CellChgUTp_Second,
+	CellDsgOTp_Second,
+	CellDsgUTp_Second,
+	MosOTp_Second,
+	VdeltaOvp_Second,
+	CellSocUp_Second,
+
+	CellOvp_Third,
+	CellUvp_Third,
+	BatOvp_Third,
+	BatUvp_Third,
+	IchgOcp_Third,
+	IdischgOcp_Third,
+	CellChgOTp_Third,
+	CellChgUTp_Third,
+	CellDsgOTp_Third,
+	CellDsgUTp_Third,
+	MosOTp_Third,
+	VdeltaOvp_Third,
+	CellSocUp_Third
+};
+
+#define Record_len 10
+
+
+extern sh367309_ram_t ram_reg_309;
 
 void SH367309_UpdataAfeConfig(void);
 

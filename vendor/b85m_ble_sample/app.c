@@ -441,7 +441,7 @@ _attribute_ram_code_ void app_timer_test_irq_proc(void)
 	// gpio_toggle(GPIO_PC3);
 	if (reg_tmr_sta & FLD_TMR_STA_TMR0)
 	{
-		sif_send_data_handle();
+		// sif_send_data_handle();
 		reg_tmr_sta = FLD_TMR_STA_TMR0; // clear irq status
 		timer0_irq_cnt++;
 		// gpio_toggle(GPIO_PC3);
@@ -542,116 +542,23 @@ volatile unsigned char i2c_master_rx_buff[0x71 - 0x40 + 1 + 1] = {0};
 
 float RSENSE = 0.001;
 // float Sh_GetCadcCurrent(u16 *current)
-typedef struct
-{
-	int32_t current_10mA; // 带符号，单位 10mA（0.01A）
-	uint32_t chg_10mA;
-	uint32_t dsg_10mA;
-	int16_t raw;
-	bool is_charge;
-	bool is_discharge;
-} sh309_current10_t;
-
-// rsense 用 “毫欧” 做整数最省事：2mΩ => 2
-// 你现在 RSENSE_UOHM=1000 相当于 1mΩ，这里就传 rsense_mOhm=1
-static inline sh309_current10_t Sh309_GetCadcCurrent_10mA_32(const uint8_t *rx_buf,
-															 uint16_t rsense_mOhm,
-															 int16_t raw_offset,
-															 bool discharge_positive)
-{
-	sh309_current10_t out = {0};
-
-	uint8_t hi = rx_buf[0x6E - 0x40];
-	uint8_t lo = rx_buf[0x6F - 0x40];
-	uint16_t u = ((uint16_t)hi << 8) | lo;
-
-	int16_t raw = (int16_t)u;
-	raw = (int16_t)(raw - raw_offset);
-	out.raw = raw;
-
-	if (rsense_mOhm == 0)
-		return out;
-
-	// 目标：current(0.01A) = raw * 200 * 100 / 21470 / (rsense_mOhm/1000)
-	//                     = raw * 200000 / 21470 / rsense_mOhm
-	//
-	// raw*200000 最大约 6,553,400,000（超过 int32）
-	// 所以拆一下：先 raw*200（<= 6,553,400，安全），再 *1000（<= 6,553,400,000，还是可能超 int32）
-	// 再聪明一点：先除 21470 再乘 1000，保证全程 32 位
-
-	int32_t a = (int32_t)raw * 200; // <= ±6,553,400
-	int32_t b = a / 21470;			// 约 ±305（粗略）
-	int32_t c = b * 1000;			// 约 ±305,000
-	int32_t cur_10mA = c / (int32_t)rsense_mOhm;
-
-	out.current_10mA = cur_10mA;
-
-	// 方向语义
-	if (discharge_positive)
-	{
-		out.is_discharge = (cur_10mA > 0);
-		out.is_charge = (cur_10mA < 0);
-	}
-	else
-	{
-		out.is_charge = (cur_10mA > 0);
-		out.is_discharge = (cur_10mA < 0);
-		// 如需统一“正=放电”，可在这里 out.current_10mA = -out.current_10mA;
-	}
-
-	if (cur_10mA >= 0)
-	{
-		out.dsg_10mA = (uint32_t)cur_10mA;
-		out.chg_10mA = 0;
-	}
-	else
-	{
-		out.chg_10mA = (uint32_t)(-cur_10mA);
-		out.dsg_10mA = 0;
-	}
-
-	return out;
-}
-
-#if 0
-float Sh_GetCadcCurrent(void)
-{
-	u8 ret = 0;
-	u16 tempvalue;
-	float current;
-
-	tempvalue = (u16)(i2c_master_rx_buff[0x6e - 0x40] << 8) + i2c_master_rx_buff[0x6f - 0x40];
-	printf("tempvalue %d", tempvalue);
-
-	if ((tempvalue & 0x8000) == 0x8000)
-	{
-		tempvalue = 0x10000 - tempvalue;
-		current = -((float)(tempvalue) * 200 / 21470.0f / RSENSE);
-	}
-	else
-	{
-		//*current = (uint16_t)((float)(tempvalue - CurrOffset) * 200 / 21470.0 / RSENSE);
-		current = ((float)(tempvalue) * 200 / 21470.0f / RSENSE);
-	}
-	return current;
-}
-#endif
 void i2c_master_mainloop(void)
 {
 #define SLAVE_DMA_MODE_OTHER_DEV_WRITE (0x46)
 #define SLAVE_DMA_MODE_OTHER_DEV_READ (0x40)
 	u8 addr = SLAVE_DMA_MODE_OTHER_DEV_READ;
-	u8 len = (0x71 - 0x40 + 1); // 手册说：长度不包含CRC
+	u8 len = (0x71 - 0x40 + 1); // 鎵嬪唽璇达細闀垮害涓嶅寘鍚獵RC
 	// i2c_master_tx_buff[0] += 1;
 	// 825x slave dma mode, sram address(0x40000~0x4FFFF) length should be 3 byte
 	// i2c_write_series(SLAVE_DMA_MODE_OTHER_DEV_WRITE, 1, (unsigned char *)i2c_master_tx_buff, DBG_DATA_LEN);
 	// WaitMs(100);   //1 S
 	// i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len + 1);
-	i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len);
+	// i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len);
 	i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)&ram_reg_309, len);
 	// array_printf(i2c_master_rx_buff, len);
 	// Sh_GetCadcCurrent();
-	App_AFEGet();	
+	App_AFEGet();
+	// printf("current %d,%d", g_stCellInfoReport.u16Ichg, g_stCellInfoReport.u16IDischg);
 
 #if 0
 		/*********** copy the data read by i2c master from slave for debug  ****************/
@@ -820,31 +727,29 @@ void user_init_normal(void)
 		// storage_test_init();
 		bls_ota_registerStartCmdCb(app_enter_ota_mode);
 
-		gpio_set_func(GPIO_PC3, AS_GPIO); // PA4 默认为 GPIO 功能，可以不设置
+		gpio_set_func(GPIO_PC3, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
 		gpio_set_input_en(GPIO_PC3, 0);
 		gpio_set_output_en(GPIO_PC3, 1);
 
 		app_timer_test_init();
 
-		gpio_set_func(GPIO_PD7, AS_GPIO); // PA4 默认为 GPIO 功能，可以不设置
+		gpio_set_func(GPIO_PD7, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
 		gpio_set_input_en(GPIO_PD7, 0);
 		gpio_set_output_en(GPIO_PD7, 0);
 
 		SH367309_UpdataAfeConfig();
 		// ctl
-		gpio_set_func(GPIO_PB6, AS_GPIO); // PA4 默认为 GPIO 功能，可以不设置
+		gpio_set_func(GPIO_PB6, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
 		gpio_set_input_en(GPIO_PB6, 0);
 		gpio_set_output_en(GPIO_PB6, 1);
 		gpio_write(GPIO_PB6, 1);
 		// chg mos soft control
-		gpio_set_func(GPIO_PA1, AS_GPIO); // PA4 默认为 GPIO 功能，可以不设置
+		gpio_set_func(GPIO_PA1, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
 		gpio_set_input_en(GPIO_PA1, 0);
 		gpio_set_output_en(GPIO_PA1, 1);
 		gpio_write(GPIO_PA1, 1);
 
-		
-		soc_param_lib_init(80);
-
+		soc_param_lib_init(__INIT_SOC__);
 	}
 }
 
@@ -935,11 +840,11 @@ void generate_test_data(int len)
 {
 	for (int i = 0; i < len; i++)
 	{
-		test_buf[i] = i & 0xFF; // 有规律的数据，方便 checksum
+		test_buf[i] = i & 0xFF; // 鏈夎寰嬬殑鏁版嵁锛屾柟渚� checksum
 	}
 }
 
-#define TELINK_NOTIFY_PAYLOAD 20 // MTU=23 时 payload = 20
+#define TELINK_NOTIFY_PAYLOAD 20 // MTU=23 鏃� payload = 20
 
 ble_sts_t notify_big_packet(u16 conn, u16 handle, u8 *data, u16 len)
 {
@@ -963,32 +868,32 @@ ble_sts_t notify_big_packet(u16 conn, u16 handle, u8 *data, u16 len)
 
 		offset += chunk;
 
-		// Telink 特性：需要给对端一点时间，否则 notify 会被吞
-		// sleep_us(800);   // 0.8ms足够安全
+		// Telink 鐗规�э細闇�瑕佺粰瀵圭涓�鐐规椂闂达紝鍚﹀垯 notify 浼氳鍚�
+		// sleep_us(800);   // 0.8ms瓒冲瀹夊叏
 	}
 
 	return BLE_SUCCESS;
 }
 
-static int soc = 0; // 当前 SOC
+static int soc = 0; // 褰撳墠 SOC
 int get_soc(void)
 {
 	return soc;
 }
 int simulate_soc(void)
 {
-	static int dir = 1; // 1: 增加, -1: 减少
+	static int dir = 1; // 1: 澧炲姞, -1: 鍑忓皯
 #if 0
     {
         soc += dir;
 
-        // 到达上限，反向
+        // 鍒拌揪涓婇檺锛屽弽鍚�
         if (soc >= 100)
         {
             soc = 100;
             dir = -1;
         }
-        // 到达下限，反向
+        // 鍒拌揪涓嬮檺锛屽弽鍚�
         else if (soc <= 0)
         {
             soc = 0;
@@ -1066,21 +971,6 @@ const u16 protect_para[65] = {
 	6,
 	100,
 };
-const u16 soc_para[25] = {
-	600, 600, 600, 600, 600, 600,
-	580, 590, 600,
-	1280,
-	1280, 370,
-	88, 0,
-	66,
-	100,
-	6600,
-	10000,
-	10000,
-	30,
-	0, 0, 0,
-	0, 0};
-
 const u16 protect_status[21] = {
 	1,
 	1,
@@ -1105,30 +995,22 @@ const u16 protect_status[21] = {
 	0,
 };
 
-const u16 other_status[12] = {
-	0x08,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-};
-
 void notify_other_status(void)
 {
-	printf("notify_other_status");
+	// printf("notify_other_status");
 	int len = 3 + 12 * 2 + 2;
 	test_buf[0] = 0x01;
 	test_buf[1] = 0x03;
 	test_buf[2] = 12 * 2;
-
+	u16 other_status[12] = {0};
+	extern volatile union System_Status SystemStatus;
+	other_status[0] = (UINT16)(SystemStatus.all & 0x0000FFFF);
+	other_status[1] = (UINT16)(SystemStatus.all >> 16);
+	// other_status[2] = (UINT16)(System_OnOFF_Func.all & 0x0000FFFF);
+	// other_status[3] = (UINT16)(System_OnOFF_Func.all >> 16);
 	size_t i;
+	for (i = 2; i < 12; i++)
+		other_status[i] = 1;
 	for (i = 0; i < 12; i++)
 	{
 		test_buf[3 + i * 2] = other_status[i] >> 8;
@@ -1142,19 +1024,65 @@ void notify_other_status(void)
 
 	ble_sts_t r = notify_big_packet(
 		BLS_CONN_HANDLE,
-		SPP_CLIENT_TO_SERVER_DP_H, // 你的 notify 句柄
+		SPP_CLIENT_TO_SERVER_DP_H, // 浣犵殑 notify 鍙ユ焺
 		test_buf,
 		len);
 }
+extern UINT8 FaultPoint_First2;
+extern UINT8 FaultPoint_Second2;
+extern UINT8 FaultPoint_Third2;
+extern UINT16 Fault_record_First2[Record_len];
+extern UINT16 Fault_record_Second2[Record_len];
+extern UINT16 Fault_record_Third2[Record_len];
 void notify_protect_status(void)
 {
-	printf(" notify_protect_status");
+	INT8 k;
+	UINT8 a[4];
+	UINT16 i = 0, j;
+	// printf(" notify_protect_status");
 	int len = 3 + 21 * 2 + 2;
 	test_buf[0] = 0x01;
 	test_buf[1] = 0x03;
 	test_buf[2] = 21 * 2;
 
-	size_t i;
+	u16 protect_status[21] = {0};
+	protect_status[0] = 0;
+	protect_status[1] = 0;
+	protect_status[2] = 0;
+	for (j = 0; j < 4; j++)
+	{
+		k = FaultPoint_First2 - 1 - j;
+		if (k < 0)
+		{
+			k = Record_len + k;
+		}
+		a[j] = k;
+	}
+	protect_status[3] = (Fault_record_First2[a[0]] << 8) | Fault_record_First2[a[1]];
+	protect_status[4] = (Fault_record_First2[a[2]] << 8) | Fault_record_First2[a[3]];
+	for (j = 0; j < 4; j++)
+	{
+		k = FaultPoint_Second2 - 1 - j;
+		if (k < 0)
+		{
+			k = Record_len + k;
+		}
+		a[j] = k;
+	}
+	protect_status[5] = (Fault_record_Second2[a[0]] << 8) | Fault_record_Second2[a[1]];
+	protect_status[6] = (Fault_record_Second2[a[2]] << 8) | Fault_record_Second2[a[3]];
+	for (j = 0; j < 4; j++)
+	{
+		k = FaultPoint_Third2 - 1 - j;
+		if (k < 0)
+		{
+			k = Record_len + k;
+		}
+		a[j] = k;
+	}
+	protect_status[7] = (Fault_record_Third2[a[0]] << 8) | Fault_record_Third2[a[1]];
+	protect_status[8] = (Fault_record_Third2[a[2]] << 8) | Fault_record_Third2[a[3]];
+
 	for (i = 0; i < 21; i++)
 	{
 		test_buf[3 + i * 2] = protect_status[i] >> 8;
@@ -1168,14 +1096,14 @@ void notify_protect_status(void)
 
 	ble_sts_t r = notify_big_packet(
 		BLS_CONN_HANDLE,
-		SPP_CLIENT_TO_SERVER_DP_H, // 你的 notify 句柄
+		SPP_CLIENT_TO_SERVER_DP_H, // 浣犵殑 notify 鍙ユ焺
 		test_buf,
 		len);
 }
 
 void notify_soc(void)
 {
-	printf("notify_soc");
+	// printf("notify_soc");
 	int len = 3 + 25 * 2 + 2;
 	test_buf[0] = 0x01;
 	test_buf[1] = 0x03;
@@ -1184,36 +1112,9 @@ void notify_soc(void)
 	size_t i;
 	for (i = 0; i < 25; i++)
 	{
-		test_buf[3 + i * 2] = soc_para[i] >> 8;
-		test_buf[4 + i * 2] = soc_para[i] & 0xff;
-		if (i == 12 || i == 13)
-		{
-			u16 current = 0;
-
-			// 1mΩ => 1
-			sh309_current10_t cur = Sh309_GetCadcCurrent_10mA_32(i2c_master_rx_buff,
-																 1, // rsense_mOhm
-																 0,
-																 true);
-
-			// 约定：i==12 放充电电流，i==13 放放电电流（按你原逻辑）
-			if (i == 12)
-			{
-				// current = (u16)(cur.chg_10mA / 10); // 单位 0.01A
-				current = (u16)(0); // 单位 0.01A
-				g_stCellInfoReport.u16Ichg = current;
-				test_buf[3 + i * 2] = current >> 8;
-				test_buf[4 + i * 2] = current & 0xff;
-			}
-			else
-			{
-				// current = (u16)(cur.dsg_10mA /10); // 单位 0.01A
-				current = (u16)(100); // 单位 0.01A
-				g_stCellInfoReport.u16IDischg = current;
-				test_buf[3 + i * 2] = current >> 8;
-				test_buf[4 + i * 2] = current & 0xff;
-			}
-		}
+		uint16_t u16SciTemp = *(&g_stCellInfoReport.u16Temperature[0] + i);
+		test_buf[3 + i * 2] = u16SciTemp >> 8;
+		test_buf[4 + i * 2] = u16SciTemp & 0xff;
 	}
 
 	i++;
@@ -1223,14 +1124,14 @@ void notify_soc(void)
 
 	ble_sts_t r = notify_big_packet(
 		BLS_CONN_HANDLE,
-		SPP_CLIENT_TO_SERVER_DP_H, // 你的 notify 句柄
+		SPP_CLIENT_TO_SERVER_DP_H, // 浣犵殑 notify 鍙ユ焺
 		test_buf,
 		len);
 }
 
 void notify_protect_prarm(void)
 {
-	printf("notify_protect_prarm");
+	// printf("notify_protect_prarm");
 	int len = 3 + 65 * 2 + 2;
 	test_buf[0] = 0x01;
 	test_buf[1] = 0x03;
@@ -1255,15 +1156,15 @@ void notify_protect_prarm(void)
 
 	ble_sts_t r = notify_big_packet(
 		BLS_CONN_HANDLE,
-		SPP_CLIENT_TO_SERVER_DP_H, // 你的 notify 句柄
+		SPP_CLIENT_TO_SERVER_DP_H, // 浣犵殑 notify 鍙ユ焺
 		test_buf,
 		len);
 }
 
 void notify_votage(void)
 {
-	int len = 3 + 38 * 2 + 2; // 你想测多少就填多少
-	printf("notify voltage");
+	int len = 3 + 38 * 2 + 2; // 浣犳兂娴嬪灏戝氨濉灏�
+	// printf("notify voltage");
 
 	static u8 vol_cnt = 0;
 	vol_cnt++;
@@ -1276,47 +1177,43 @@ void notify_votage(void)
 		{
 			test_buf[3 + i * 2] = 61001 >> 8;
 			test_buf[4 + i * 2] = 61001 & 0xff;
+
 			if (i <= 13)
 			{
-				int temp = i2c_master_rx_buff[8 + 6 + 2 * i];
-				temp = temp << 8 | i2c_master_rx_buff[9 + 6 + 2 * i];
-				temp = temp * 5 / 32;
-				// todo flash 与soc
-				// if (i == 1)
-				// 	temp = get_soc();
+				int temp = g_stCellInfoReport.u16VCell[i];
 				test_buf[3 + i * 2] = temp >> 8;
 				test_buf[4 + i * 2] = temp & 0xff;
 			}
 
 			if (i == 32)
 			{
-				test_buf[3 + i * 2] = (3500 + vol_cnt) >> 8;
-				test_buf[4 + i * 2] = (3500 + vol_cnt) & 0xff;
+				test_buf[3 + i * 2] = (g_stCellInfoReport.u16VCellMax) >> 8;
+				test_buf[4 + i * 2] = (g_stCellInfoReport.u16VCellMax) & 0xff;
 			}
 			else if (i == 33)
 			{
-				test_buf[3 + i * 2] = (2000 + vol_cnt) >> 8;
-				test_buf[4 + i * 2] = (2000 + vol_cnt) & 0xff;
+				test_buf[3 + i * 2] = (g_stCellInfoReport.u16VCellMin) >> 8;
+				test_buf[4 + i * 2] = (g_stCellInfoReport.u16VCellMin) & 0xff;
 			}
 			else if (i == 34)
 			{
-				test_buf[3 + i * 2] = 1 >> 8;
-				test_buf[4 + i * 2] = 1 & 0xff;
+				test_buf[3 + i * 2] = g_stCellInfoReport.u16VCellMaxPosition >> 8;
+				test_buf[4 + i * 2] = g_stCellInfoReport.u16VCellMaxPosition & 0xff;
 			}
 			else if (i == 35)
 			{
-				test_buf[3 + i * 2] = 2 >> 8;
-				test_buf[4 + i * 2] = 2 & 0xff;
+				test_buf[3 + i * 2] = g_stCellInfoReport.u16VCellMinPosition >> 8;
+				test_buf[4 + i * 2] = g_stCellInfoReport.u16VCellMinPosition & 0xff;
 			}
 			else if (i == 36)
 			{
-				test_buf[3 + i * 2] = (0 + vol_cnt) >> 8;
-				test_buf[4 + i * 2] = (0 + vol_cnt) & 0xff;
+				test_buf[3 + i * 2] = (g_stCellInfoReport.u16VCellDelta) >> 8;
+				test_buf[4 + i * 2] = (g_stCellInfoReport.u16VCellDelta) & 0xff;
 			}
 			else if (i == 37)
 			{
-				test_buf[3 + i * 2] = (1000 + vol_cnt) >> 8;
-				test_buf[4 + i * 2] = (1000 + vol_cnt) & 0xff;
+				test_buf[3 + i * 2] = (g_stCellInfoReport.u16VCellTotle) >> 8;
+				test_buf[4 + i * 2] = (g_stCellInfoReport.u16VCellTotle) & 0xff;
 			}
 			else if (i == 38)
 			{
@@ -1329,7 +1226,7 @@ void notify_votage(void)
 
 	ble_sts_t r = notify_big_packet(
 		BLS_CONN_HANDLE,
-		SPP_CLIENT_TO_SERVER_DP_H, // 你的 notify 句柄
+		SPP_CLIENT_TO_SERVER_DP_H, // 浣犵殑 notify 鍙ユ焺
 		test_buf,
 		len);
 }
@@ -1372,8 +1269,9 @@ void main_loop(void)
 		update_bms_info_tick = clock_time();
 		// gpio_toggle(GPIO_LED_BLUE);
 		// gpio_toggle(GPIO_PC3);
-		i2c_master_mainloop();
-		// todo 1s擦写一次flash，并notify
+		// i2c_master_mainloop();
+		App_AFEGet();
+		// todo 1s鎿﹀啓涓�娆lash锛屽苟notify
 		void update_my_batVal(void);
 		// update_my_batVal();
 		simulate_soc();
@@ -1382,9 +1280,8 @@ void main_loop(void)
 		// putchar(0x55);
 		// putchar(0xaa);
 	}
-	// storage_poll();        // 非阻塞轮询（默认不做长擦除）
-	// storage_test_step();   // 测试写入（验证 KV/LOG 稳定性）
-
+	// storage_poll();        // 闈為樆濉炶疆璇紙榛樿涓嶅仛闀挎摝闄わ級
+	// storage_test_step();   // 娴嬭瘯鍐欏叆锛堥獙璇� KV/LOG 绋冲畾鎬э級
 	{
 		// if(device_in_connection_state && clock_time_exceed(interval_update_tick, 1000*1000))
 		if (device_in_connection_state && rev_master)
