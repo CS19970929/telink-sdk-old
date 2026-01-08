@@ -47,6 +47,7 @@
 #include "tl_common.h"
 #include "drivers.h"
 
+#define DRIVER_TEST_MODE								TEST_ADC
 
 #if (DRIVER_TEST_MODE == TEST_ADC)
 

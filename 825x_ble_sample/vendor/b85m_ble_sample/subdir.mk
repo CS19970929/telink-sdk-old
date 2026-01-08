@@ -10,7 +10,8 @@ C_SRCS += \
 ../vendor/b85m_ble_sample/button.c \
 ../vendor/b85m_ble_sample/main.c \
 ../vendor/b85m_ble_sample/param.c \
-../vendor/b85m_ble_sample/sh367309_datadeal.c 
+../vendor/b85m_ble_sample/sh367309_datadeal.c \
+../vendor/b85m_ble_sample/sif_send.c 
 
 OBJS += \
 ./vendor/b85m_ble_sample/SocEnhance.o \
@@ -19,7 +20,8 @@ OBJS += \
 ./vendor/b85m_ble_sample/button.o \
 ./vendor/b85m_ble_sample/main.o \
 ./vendor/b85m_ble_sample/param.o \
-./vendor/b85m_ble_sample/sh367309_datadeal.o 
+./vendor/b85m_ble_sample/sh367309_datadeal.o \
+./vendor/b85m_ble_sample/sif_send.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes

@@ -87,7 +87,7 @@ extern "C" {
 
 
 
-#define DRIVER_TEST_MODE								TEST_HW_TIMER
+#define DRIVER_TEST_MODE								TEST_ADC
 
 
 

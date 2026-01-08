@@ -408,7 +408,7 @@ void update_my_batVal(u16 val)
 
 void MODS_Poll(u8 *data, u8 len)
 {
-	array_printf(data, len);
+	// array_printf(data, len);
 
 }
 

@@ -62,6 +62,206 @@
 #include "stdint.h"
 #include "sci_upper.h"
 #include "SocEnhance.h"
+#include "sif_send.h"
+
+extern SH367309_REG_STORE SH367309_Reg_Store;
+
+typedef enum
+{
+	ADC_APP_CH0 = 0,
+	ADC_APP_CH1 = 1,
+	ADC_APP_CH2 = 2,
+	ADC_APP_CH_MAX = 3,
+} adc_app_ch_t;
+
+/* 业务层通道配置：引脚 + 是否启用 */
+typedef struct
+{
+	GPIO_PinTypeDef pin; // 必须 PB0~PB7 / PC4 / PC5
+	uint8_t enable;		 // 1启用 0禁用
+} adc_app_ch_cfg_t;
+
+/* ============ 1) DEMO 同款固定参数 ============ */
+#define ADC_DEMO_SAMPLE_CLK_DIV 5 // 24M/(1+5)=4MHz
+#define ADC_DEMO_STATE_CAPTURE 240
+#define ADC_DEMO_STATE_SET 10
+#define ADC_DEMO_RES RES14
+#define ADC_DEMO_VREF ADC_VREF_1P2V
+#define ADC_DEMO_TSAMPLE SAMPLING_CYCLES_6
+#define ADC_DEMO_PRESCALER ADC_PRESCALER_1F8
+
+/* 你 demo 里采样函数一般默认 8 次（你的 sdk 有 ADC_SAMPLE_NUM=8） */
+#define ADC_APP_PERIOD_US 200000 // 200ms
+
+/* ============ 2) ADC 支持脚表（与你 sdk 一致） ============ */
+static GPIO_PinTypeDef s_adc_gpio_tab[10] = {
+	GPIO_PB0, GPIO_PB1, GPIO_PB2, GPIO_PB3,
+	GPIO_PB4, GPIO_PB5, GPIO_PB6, GPIO_PB7,
+	GPIO_PC4, GPIO_PC5};
+
+/* pin -> B0P(1) ... C5P(10) */
+static uint8_t adc_pin_to_inpch(GPIO_PinTypeDef pin)
+{
+	for (uint8_t i = 0; i < 10; i++)
+	{
+		if (pin == s_adc_gpio_tab[i])
+			return (uint8_t)(i + 1);
+	}
+	return 0;
+}
+
+/* ============ 3) 通道运行态（工程化架构的核心） ============ */
+typedef struct
+{
+	GPIO_PinTypeDef pin;
+	uint8_t enable;
+	uint16_t mv; // 最新值（mV）
+} adc_app_ch_state_t;
+
+static adc_app_ch_state_t s_ch[ADC_APP_CH_MAX];
+static uint32_t s_tick;
+
+/* ============ 4) DEMO 同款：GPIO 设为模拟输入态 ============ */
+static void adc_pin_analog_init(GPIO_PinTypeDef pin)
+{
+	gpio_set_func(pin, AS_GPIO);
+	gpio_set_input_en(pin, 0);
+	gpio_set_output_en(pin, 0);
+	gpio_write(pin, 0);
+}
+
+/* ============ 5) DEMO 同款：切换 MISC 差分输入 ============ */
+static void adc_misc_switch_to_pin(GPIO_PinTypeDef pin)
+{
+	uint8_t inpch = adc_pin_to_inpch(pin);
+	if (!inpch)
+		return; // 非 ADC 支持脚
+
+#if (MCU_CORE_TYPE == MCU_CORE_825x)
+	adc_set_ain_channel_differential_mode(ADC_MISC_CHN, (ADC_InputPchTypeDef)inpch, GND);
+#else
+	// 827x 你工程若用另一套 API，这里对应改一下
+	adc_set_ain_channel_differential_mode((ADC_InputPchTypeDef)inpch, GND);
+#endif
+}
+
+/* ============ 6) DEMO 同款：一次性初始化（app_adc_test_init 的工程版） ============ */
+static void adc_demo_style_init_common(void)
+{
+	/* Step1: power off sar adc */
+	adc_power_on_sar_adc(0);
+
+	/* Step2: common adc settings */
+	adc_enable_clk_24m_to_sar_adc(1);
+	adc_set_sample_clk(ADC_DEMO_SAMPLE_CLK_DIV);
+
+#if (MCU_CORE_TYPE == MCU_CORE_8258)
+	adc_set_left_gain_bias(GAIN_STAGE_BIAS_PER100);
+	adc_set_right_gain_bias(GAIN_STAGE_BIAS_PER100);
+#endif
+
+	/* Step3: misc channel settings（跟 demo 一致） */
+	adc_set_chn_enable_and_max_state_cnt(ADC_MISC_CHN, 2);
+
+#if (MCU_CORE_TYPE == MCU_CORE_8278)
+	adc_set_state_length(ADC_DEMO_STATE_CAPTURE, ADC_DEMO_STATE_SET);
+#else
+	adc_set_state_length(ADC_DEMO_STATE_CAPTURE, 0, ADC_DEMO_STATE_SET);
+#endif
+
+#if (MCU_CORE_TYPE == MCU_CORE_825x)
+	adc_set_resolution(ADC_MISC_CHN, ADC_DEMO_RES);
+	adc_set_ref_voltage(ADC_MISC_CHN, ADC_DEMO_VREF);
+	adc_set_tsample_cycle(ADC_MISC_CHN, ADC_DEMO_TSAMPLE);
+#else
+	adc_set_resolution(ADC_DEMO_RES);
+	adc_set_ref_voltage(ADC_DEMO_VREF);
+	adc_set_tsample_cycle(ADC_DEMO_TSAMPLE);
+#endif
+
+	adc_set_ain_pre_scaler(ADC_DEMO_PRESCALER);
+
+	/* Step4: power on sar adc */
+	adc_power_on_sar_adc(1);
+}
+
+/* ============ 7) 对外 API ============ */
+void adc_app_init(const adc_app_ch_cfg_t cfg[ADC_APP_CH_MAX])
+{
+	memset(s_ch, 0, sizeof(s_ch));
+
+	for (int i = 0; i < ADC_APP_CH_MAX; i++)
+	{
+		s_ch[i].pin = cfg[i].pin;
+		s_ch[i].enable = cfg[i].enable ? 1 : 0;
+		s_ch[i].mv = 0;
+
+		/* 只要启用且 pin 合法，就把 GPIO 设成模拟输入态 */
+		if (s_ch[i].enable && adc_pin_to_inpch(s_ch[i].pin))
+		{
+			adc_pin_analog_init(s_ch[i].pin);
+		}
+		else
+		{
+			s_ch[i].enable = 0; // pin 不合法直接禁用
+		}
+	}
+
+	adc_demo_style_init_common();
+
+	/* 默认切到 CH0（避免第一次采样通道未知） */
+	if (s_ch[0].enable)
+	{
+		adc_misc_switch_to_pin(s_ch[0].pin);
+	}
+
+	s_tick = clock_time();
+}
+
+int adc_app_set_channel(adc_app_ch_t ch, GPIO_PinTypeDef pin, uint8_t enable)
+{
+	if ((unsigned)ch >= ADC_APP_CH_MAX)
+		return -1;
+
+	if (enable)
+	{
+		if (!adc_pin_to_inpch(pin))
+			return -2; // 非 ADC 支持脚
+		s_ch[ch].pin = pin;
+		s_ch[ch].enable = 1;
+		adc_pin_analog_init(pin);
+	}
+	else
+	{
+		s_ch[ch].enable = 0;
+		s_ch[ch].mv = 0;
+	}
+	return 0;
+}
+
+uint16_t adc_app_get_mv(adc_app_ch_t ch)
+{
+	if ((unsigned)ch >= ADC_APP_CH_MAX)
+		return 0;
+	if (!s_ch[ch].enable)
+		return 0;
+	return s_ch[ch].mv;
+}
+
+void adc_app_process_200ms(void)
+{
+	/* 轮询采 3 路：切通道 -> 直接用你 sdk 的 adc_sample_and_get_result() */
+	for (int i = 0; i < ADC_APP_CH_MAX; i++)
+	{
+		if (!s_ch[i].enable)
+			continue;
+
+		adc_misc_switch_to_pin(s_ch[i].pin);
+
+		/* 你 demo 的函数：返回单位 mV */
+		s_ch[i].mv = (uint16_t)adc_sample_and_get_result();
+	}
+}
 
 struct stCell_Info g_stCellInfoReport;
 
@@ -441,7 +641,7 @@ _attribute_ram_code_ void app_timer_test_irq_proc(void)
 	// gpio_toggle(GPIO_PC3);
 	if (reg_tmr_sta & FLD_TMR_STA_TMR0)
 	{
-		// sif_send_data_handle();
+		sif_send_data_handle();
 		reg_tmr_sta = FLD_TMR_STA_TMR0; // clear irq status
 		timer0_irq_cnt++;
 		// gpio_toggle(GPIO_PC3);
@@ -733,23 +933,121 @@ void user_init_normal(void)
 
 		app_timer_test_init();
 
-		gpio_set_func(GPIO_PD7, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
-		gpio_set_input_en(GPIO_PD7, 0);
-		gpio_set_output_en(GPIO_PD7, 0);
+		gpio_set_func(AFE1_PRO_EN_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+		gpio_set_input_en(AFE1_PRO_EN_PIN, 0);
+		gpio_set_output_en(AFE1_PRO_EN_PIN, 1);
 
 		SH367309_UpdataAfeConfig();
 		// ctl
-		gpio_set_func(GPIO_PB6, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
-		gpio_set_input_en(GPIO_PB6, 0);
-		gpio_set_output_en(GPIO_PB6, 1);
-		gpio_write(GPIO_PB6, 1);
-		// chg mos soft control
-		gpio_set_func(GPIO_PA1, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
-		gpio_set_input_en(GPIO_PA1, 0);
-		gpio_set_output_en(GPIO_PA1, 1);
-		gpio_write(GPIO_PA1, 1);
+		gpio_set_func(AFE_CTL_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+		gpio_set_input_en(AFE_CTL_PIN, 0);
+		gpio_set_output_en(AFE_CTL_PIN, 1);
+		gpio_write(AFE_CTL_PIN, 1);
+
+		{
+			// gpio_set_func(RF_EN_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+			// gpio_set_input_en(RF_EN_PIN, 0);
+			// gpio_set_output_en(RF_EN_PIN, 1);
+			// gpio_write(RF_EN_PIN, 1);
+
+			gpio_set_func(SW_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+			gpio_set_input_en(SW_PIN, 1);
+			gpio_set_output_en(SW_PIN, 0);
+			// gpio_write(GPIO_PA1, 1);
+
+			gpio_set_func(MCC_C_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+			gpio_set_input_en(MCC_C_PIN, 0);
+			gpio_set_output_en(MCC_C_PIN, 1);
+			gpio_write(MCC_C_PIN, 0);
+
+			gpio_set_func(MCC_C_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+			gpio_set_input_en(MCC_C_PIN, 0);
+			gpio_set_output_en(MCC_C_PIN, 1);
+			gpio_write(MCC_C_PIN, 0);
+
+			gpio_set_func(CHG_IN_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+			gpio_setup_up_down_resistor(CHG_IN_PIN, PM_PIN_PULLUP_10K);
+			gpio_set_input_en(CHG_IN_PIN, 1);
+			gpio_set_output_en(CHG_IN_PIN, 0);
+			// gpio_write(MCC_C_PIN, 0);
+			gpio_set_func(CHG_WK_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+			gpio_set_input_en(CHG_WK_PIN, 1);
+			gpio_set_output_en(CHG_WK_PIN, 0);
+			// gpio_write(MCC_C_PIN, 0);
+			gpio_set_func(ADC_BUSEN_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+			gpio_set_input_en(ADC_BUSEN_PIN, 0);
+			gpio_set_output_en(ADC_BUSEN_PIN, 1);
+			gpio_write(ADC_BUSEN_PIN, 1);
+
+			gpio_set_func(ADC_EN_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+			gpio_set_input_en(ADC_EN_PIN, 0);
+			gpio_set_output_en(ADC_EN_PIN, 1);
+			gpio_write(ADC_EN_PIN, 1);
+
+			gpio_set_func(OWC_TX_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
+			gpio_set_input_en(OWC_TX_PIN, 0);
+			gpio_set_output_en(OWC_TX_PIN, 1);
+			gpio_write(OWC_TX_PIN, 0);
+		}
 
 		soc_param_lib_init(__INIT_SOC__);
+		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+
+		adc_app_ch_cfg_t cfg[ADC_APP_CH_MAX] = {
+			{ADC_NTC_PIN, 1},  // CH0: 电压分压
+			{ADC_VBUS_PIN, 1}, // CH1: NTC1
+			{ADC_NMOS_PIN, 1}, // CH2: NTC2
+		};
+
+		adc_app_init(cfg);
+	}
+}
+
+void charger_detect_and_keyLogi_200ms(void)
+{
+	static u8 state = 0;
+
+	switch (state)
+	{
+	case 0:
+		if (!gpio_read(CHG_IN_PIN))
+		{
+			putchar(0x55);
+			state = 1;
+			// gpio_write(AFE_CTL_PIN, 0);
+
+			SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 寮�鍚疌ADC
+			SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+			SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 0; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+			MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+			gpio_write(MCC_C_PIN, 1);
+		}
+		else
+		{
+			putchar(0xaa);
+		}
+		break;
+	case 1:
+		if (gpio_read(CHG_IN_PIN))
+		{
+			putchar(0xaa);
+			state = 0;
+			SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 寮�鍚疌ADC
+			SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+			SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+			MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+			gpio_write(MCC_C_PIN, 0);
+
+			// gpio_write(AFE_CTL_PIN, 1);
+		}
+		else
+		{
+			putchar(0x55);
+		}
+		break;
+
+	default:
+		break;
 	}
 }
 
@@ -970,29 +1268,6 @@ const u16 protect_para[65] = {
 	5,
 	6,
 	100,
-};
-const u16 protect_status[21] = {
-	1,
-	1,
-	1,
-	1,
-	2,
-	1,
-	2,
-	1,
-	2,
-	0x0101,
-	1,
-	1,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	1,
-	0,
-	0,
 };
 
 void notify_other_status(void)
@@ -1231,6 +1506,11 @@ void notify_votage(void)
 		len);
 }
 
+// todo
+/*
+1.休眠
+2.flash
+*/
 /**
  * @brief     BLE main loop
  * @param[in]  none.
@@ -1256,20 +1536,10 @@ void main_loop(void)
 		proc_button(0, 0, 0); // button triggers pair & unpair  and OTA
 	}
 #endif
-	/*
-	ffff
-	fff0
-	ffef
-	ffea
-	*/
-
 	_attribute_data_retention_ static u32 update_bms_info_tick = 0;
 	if (clock_time_exceed(update_bms_info_tick, 1000 * 200))
 	{
 		update_bms_info_tick = clock_time();
-		// gpio_toggle(GPIO_LED_BLUE);
-		// gpio_toggle(GPIO_PC3);
-		// i2c_master_mainloop();
 		App_AFEGet();
 		// todo 1s鎿﹀啓涓�娆lash锛屽苟notify
 		void update_my_batVal(void);
@@ -1277,8 +1547,22 @@ void main_loop(void)
 		simulate_soc();
 		extern u32 rev_cnt;
 		APP_SOC_IntEnhance_Ctrl();
-		// putchar(0x55);
-		// putchar(0xaa);
+
+		adc_app_process_200ms();
+		uint16_t v0 = adc_app_get_mv(ADC_APP_CH0);
+		uint16_t v1 = adc_app_get_mv(ADC_APP_CH1);
+		uint16_t v2 = adc_app_get_mv(ADC_APP_CH2);
+		printf("adc %d %d %d", v0, v1, v2);
+		charger_detect_and_keyLogi_200ms();
+
+#if 0
+		if(sleep_en)
+		{
+			//todo 确认afe通信正常机制？？？
+extern void AFE_Sleep(void);
+			AFE_Sleep();
+		}
+#endif
 	}
 	// storage_poll();        // 闈為樆濉炶疆璇紙榛樿涓嶅仛闀挎摝闄わ級
 	// storage_test_step();   // 娴嬭瘯鍐欏叆锛堥獙璇� KV/LOG 绋冲畾鎬э級

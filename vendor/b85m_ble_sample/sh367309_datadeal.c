@@ -735,15 +735,8 @@ u8 AFE_IsReady(void)
 }
 void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 {
-    // ucMTP_CONF |= 0x04;						//寮�鍚湅闂ㄧ嫍锛屼笉寮�鐪嬮棬鐙楄涓嶈
-    // 缁撹锛屽彲浠ヤ笉寮�鍚�傜湅闂ㄧ嫍婧㈠嚭锛屾搷浣滄槸
-    // 1锛屽叧闂厖鏀剧數MOS鍜岄鍏匨OS
-    // 2锛屾竻闄ゅ潎琛�
-    // 涓よ�呭浜庣洰鍓嶄娇鐢ㄦ儏鍐垫剰涔変笉澶э紝浼戠湢甯︾數涓嶅厑璁稿紑锛孧CU鎺ч┍鍔ㄦ病鎰忎箟
-    // 30x鏄渶瑕佸紑鐨勶紝鍥犱负鏄嚜宸辩殑淇濇姢浣撶郴锛岃繖涓�309鐢ㄧ殑鏄粬鑷繁鐨勪綋绯伙紝鎵�浠ュ氨绠楀嚭闂
-    // 鐪嬮棬鐙椾笉鍏筹紝浠栬嚜宸辩殑淇濇姢浣撶郴鍒ゆ柇鏄惁鍏矼OS锛岄闄╀篃涓嶅ぇ銆�
     SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 寮�鍚疌ADC
-    SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+    SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
     SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 鏀剧數MOS鐢盇FE纭欢鎺у埗
     MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
@@ -1504,3 +1497,9 @@ void App_AFEGet(void)
     SystemStatus.bits.b1Status_MOS_DSG = ram_reg_309.REG_BSTATUS3.bits.DSG_FET;
     Fault_ChangeToMCU();
 }
+void AFE_Sleep(void)
+{
+	SH367309_Reg_Store.REG_MTP_CONF.bits.SLEEP = 1;
+	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+}
+

@@ -2,78 +2,30 @@
 #include "conf.h"
 #include "sif_send.h"
 #include "Sci_Upper.h"
-#include "System_Monitor.h"
+#include "sh367309_datadeal.h"
+// #include "System_Monitor.h"
 
-#include "one_wire.h"
 #include "Sci_Upper.h"
 #include <stdint.h>
-#include "em_gpio.h"
-#include "em_timer.h"
 
 #include "conf.h"
-
-#include "one_wire.h"
-#include "em_timer.h"
-#include "em_cmu.h"
-#include "sl_udelay.h"
-#include "DataDeal.h"
-#include "power manager.h"
-#include "usart.h"
+#include "tl_common.h"
+#include "drivers.h"
 
 void sif_send_PRIVATE_PACKETS_CELLVOLTAGE(void);
 void sif_send_PRIVATE_PACKETS_BATTARY_CODE_H(void);
 void sif_send_PRIVATE_PACKETS_REALTIME_INFO(void);
 void sif_send_PUBLIC_PACKETS(void);
 
+extern struct stCell_Info g_stCellInfoReport;
+
+#define sif_turn_off() gpio_write(OWC_TX_PIN, 0);
+#define sif_turn_on() gpio_write(OWC_TX_PIN, 1);
 #if 1
 
 #define __INTEL__LSB__
 
 #define __TODO__ 0Xaa
-
-#ifdef __test__
-
-#define PORT_I2C_SCL GPIOB     /* GPIO�˿� */
-#define PIN_I2C_SCL GPIO_Pin_8 /* GPIO���� */
-
-#define PORT_I2C_SDA GPIOB     /* GPIO�˿� */
-#define PIN_I2C_SDA GPIO_Pin_4 /* GPIO���� */
-
-#define I2C_SCL_PIN GPIO_Pin_8 /* ���ӵ�SCLʱ���ߵ�GPIO */
-#define I2C_SDA_PIN GPIO_Pin_4 /* ���ӵ�SDA�����ߵ�GPIO */
-
-/* �����дSCL��SDA�ĺ� */
-#define I2C_SCL_1() PORT_I2C_SCL->BSRR = I2C_SCL_PIN /* SCL = 1 */
-#define I2C_SCL_0() PORT_I2C_SCL->BRR = I2C_SCL_PIN  /* SCL = 0 */
-
-#define I2C_SDA_1() PORT_I2C_SDA->BSRR = I2C_SDA_PIN /* SDA = 1 */
-#define I2C_SDA_0() PORT_I2C_SDA->BRR = I2C_SDA_PIN  /* SDA = 0 */
-
-#define I2C_SDA_READ() ((PORT_I2C_SDA->IDR & I2C_SDA_PIN) != 0) /* ��SDA����״̬ */
-#define I2C_SCL_READ() ((PORT_I2C_SCL->IDR & I2C_SCL_PIN) != 0) /* ��SCL����״̬ */
-
-#else
-
-#define PORT_I2C_SCL GPIOB     /* GPIO�˿� */
-#define PIN_I2C_SCL GPIO_Pin_8 /* GPIO���� */
-
-#define PORT_I2C_SDA GPIOB     /* GPIO�˿� */
-#define PIN_I2C_SDA GPIO_Pin_4 /* GPIO���� */
-
-#define I2C_SCL_PIN GPIO_Pin_8                       /* ���ӵ�SCLʱ���ߵ�GPIO */
-#define I2C_SDA_PIN GPIO_Pin_4                       /* ���ӵ�SDA�����ߵ�GPIO */
-
-/* �����дSCL��SDA�ĺ� */
-#define I2C_SCL_1() PORT_I2C_SCL->BSRR = I2C_SCL_PIN /* SCL = 1 */
-#define I2C_SCL_0() PORT_I2C_SCL->BRR = I2C_SCL_PIN  /* SCL = 0 */
-
-#define I2C_SDA_1() PORT_I2C_SDA->BSRR = I2C_SDA_PIN /* SDA = 1 */
-#define I2C_SDA_0() PORT_I2C_SDA->BRR = I2C_SDA_PIN  /* SDA = 0 */
-
-#define I2C_SDA_READ() ((PORT_I2C_SDA->IDR & I2C_SDA_PIN) != 0) /* ��SDA����״̬ */
-#define I2C_SCL_READ() ((PORT_I2C_SCL->IDR & I2C_SCL_PIN) != 0) /* ��SCL����״̬ */
-
-#endif
 
 #define SIF_VERSION 1
 #define SIF_SYNC (2 * (10 + 1))
@@ -90,8 +42,8 @@ volatile static SIF_STATE_E state_mode = SEND_DATA_COMPLETE;
 volatile static int8_t bit_cnt = 7;
 volatile static uint8_t byte_cnt = 0;
 
-static uint8_t sif_sendArray[64] = {0};      // ��Ҫ���͵�����
-volatile static uint8_t sif_send_length = 0; // ���ݵĳ���
+static uint8_t sif_sendArray[64] = {0};      // 閿熸枻鎷疯閿熸枻鎷烽敓閰电鎷烽敓鏂ゆ嫹閿熸枻鎷�
+volatile static uint8_t sif_send_length = 0; // 閿熸枻鎷烽敓鎹风殑绛规嫹閿熸枻鎷�
 
 static uint8_t sif_enable = 0;
 
@@ -218,10 +170,10 @@ void sif_gpio_init()
     GPIO_InitTypeDef GPIO_InitStructure;
 
 #if 0
-	RCC_APB2PeriphClockCmd(RCC_I2C_PORT, ENABLE);	/* ��GPIOʱ�� */
+	RCC_APB2PeriphClockCmd(RCC_I2C_PORT, ENABLE);	/* 閿熸枻鎷稧PIO鏃堕敓鏂ゆ嫹 */
 
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_Mode = GPIO_OType_OD;	/* ��©���ģʽ */
+	GPIO_InitStructure.GPIO_Mode = GPIO_OType_OD;	/* 閿熸枻鎷锋紡閿熸枻鎷烽敓渚ワ吉锟� */
 	
 	GPIO_InitStructure.GPIO_Pin = PIN_I2C_SCL;
 	GPIO_Init(PORT_I2C_SCL, &GPIO_InitStructure);
@@ -237,7 +189,7 @@ void sif_gpio_init()
     // GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
     GPIO_Init(PORT_I2C_SDA, &GPIO_InitStructure);
 
-    /* ��һ��ֹͣ�ź�, ��λI2C�����ϵ������豸������ģʽ */
+    /* 閿熸枻鎷蜂竴閿熸枻鎷峰仠姝㈤敓鑴氱尨鎷�, 閿熸枻鎷蜂綅I2C閿熸枻鎷烽敓鏂ゆ嫹閿熻緝纰夋嫹閿熸枻鎷烽敓鏂ゆ嫹閿熷�熷閿熸枻鎷烽敓鏂ゆ嫹閿熸枻鎷锋ā寮� */
     // i2c_Stop();
     // i2c_Stop1();
 
@@ -277,7 +229,7 @@ void sif_switch(uint8_t open)
         sif_enable = 0;
 }
 
-void sif_send_data_handle()
+void sif_send_data_handle(void)
 // static void sif_send_data_handle(uint8_t state)
 {
     // if (!sif_enable)
@@ -286,23 +238,26 @@ void sif_send_data_handle()
     static uint8_t pubblic_frame3_cnt = 0;
     static uint16_t cnt_60s = 0;
     static uint16_t cnt = 0;
+    static uint8_t res;
+    uint8_t count = SIF_SEND_COUNT;
+    static uint8_t nums = sizeof(uint8_t) * 8;
+    static uint8_t is60s = 0;
+    uint8_t *p = (uint8_t *)sif_sendArray;
 
     switch (state_mode)
     {
     case SIF_IDLE:
-        static uint32_t cnt_60s = 0;
-        static uint8_t is60s = 0;
 
         sif_turn_on();
 
-        if (!GPIO_PinInGet(SL_EMLIB_GPIO_INIT_ONEWIRERXWKUP_PORT, SL_EMLIB_GPIO_INIT_ONEWIRERXWKUP_PIN))
-        {
-            cnt = 0;
-            state_mode = SIF_IDLE;
-            iswakeup = true;
-            cnt_60s = 0;
-            return;
-        }
+        // if (!GPIO_PinInGet(SL_EMLIB_GPIO_INIT_ONEWIRERXWKUP_PORT, SL_EMLIB_GPIO_INIT_ONEWIRERXWKUP_PIN))
+        // {
+        //     cnt = 0;
+        //     state_mode = SIF_IDLE;
+        //     iswakeup = true;
+        //     cnt_60s = 0;
+        //     return;
+        // }
 
         if (++cnt >= 2 * 1000)
         {
@@ -311,7 +266,7 @@ void sif_send_data_handle()
         }
         // sif_turn_off();
         break;
-    case SYNC_SIGNAL: // ͬ��ģʽ
+    case SYNC_SIGNAL: // 鍚岄敓鏂ゆ嫹妯″紡
 
         if (sif_sync_tosc < SIF_SYNC - 1 * 2)
         {
@@ -335,7 +290,7 @@ void sif_send_data_handle()
 
             // if (iswakeup)
             // {
-            //     //todo 时序对不对？ 数据更新？
+            //     //todo 閺冭泛绨�甸�涚瑝鐎电櫢绱� 閺佺増宓侀弴瀛樻煀閿涳拷
             //     sif_send_PUBLIC_PACKETS();
             //     state_mode = SEND_PUBLIC;
             // }
@@ -348,7 +303,7 @@ void sif_send_data_handle()
 
             if (iswakeup)
             {
-                // todo 时序对不对？ 数据更新？
+                // todo 閺冭泛绨�甸�涚瑝鐎电櫢绱� 閺佺増宓侀弴瀛樻煀閿涳拷
                 sif_send_PUBLIC_PACKETS();
                 ++pubblic_frame3_cnt;
                 if (pubblic_frame3_cnt >= 3)
@@ -375,15 +330,11 @@ void sif_send_data_handle()
         break;
     // case SEND_PUBLIC:
     //     break;
-    case SEND_DATA: // ��������
-        static uint8_t res;
-        uint8_t count = SIF_SEND_COUNT;
-        static uint8_t nums = sizeof(uint8_t) * 8;
+    case SEND_DATA: // 閿熸枻鎷烽敓鏂ゆ嫹閿熸枻鎷烽敓鏂ゆ嫹
 
         // sif_send_PRIVATE_PACKETS_REALTIME_INFO();
         // memset(&sif_report.private.realTimeInfo.id, sizeof(sif_report.private.realTimeInfo));
 
-        uint8_t *p = (uint8_t *)sif_sendArray;
         sif_send_tosc = sif_send_tosc % count;
 
 #ifdef __INTEL__LSB__
@@ -471,7 +422,7 @@ void sif_send_data_handle()
         // sif_sync_tosc++;
         break;
     }
-    case SEND_DATA_COMPLETE: // ���ݷ�����ɣ�����־λ��0
+    case SEND_DATA_COMPLETE: // 閿熸枻鎷烽敓鎹峰嚖鎷烽敓鏂ゆ嫹閿熸枻鎷锋閿熸枻鎷烽敓鏂ゆ嫹閿熻鐤氫紮鎷烽敓锟�0
 
 #if 0
         static uint16_t cnt = 0;
@@ -561,7 +512,7 @@ void sif_send_PUBLIC_PACKETS(void)
 #define __public_batttery_comply__ (0x01)
 #define __public_battery_type__ __TODO__
 #define __public_BatteryCoreMaterial__ (0x03)
-#define __public_Rated_voltage__ (SNum * 36)
+#define __public_Rated_voltage__ (SeriesNum * 36)
     // #define __public_CapacityFactory__          __TODO__
     // #define __public_         0x01
     // #define __public_         0x01
@@ -643,23 +594,23 @@ void sif_send_PUBLIC_PACKETS(void)
         // }
 
         uint8_t fault = 0;
-        if (regRam.BSTATUS1.Bit.OCD2)
+        if (ram_reg_309.REG_BSTATUS1.bits.OCD2)
             fault = 0x01;
-        if (regRam.BSTATUS1.Bit.OCD1)
+        if (ram_reg_309.REG_BSTATUS1.bits.OCD1)
             fault = 0x02;
-        if (regRam.BSTATUS2.Bit.UTC)
+        if (ram_reg_309.REG_BSTATUS2.bits.UTC)
             fault = 0x03;
-        if (regRam.BSTATUS2.Bit.OTC)
+        if (ram_reg_309.REG_BSTATUS2.bits.OTC)
             fault = 0x04;
-        if (regRam.BSTATUS2.Bit.OTD)
+        if (ram_reg_309.REG_BSTATUS2.bits.OTD)
             fault = 0x05;
-        if (regRam.BSTATUS1.Bit.UV)
+        if (ram_reg_309.REG_BSTATUS1.bits.UV)
             fault = 0x06;
-        if (regRam.BSTATUS1.Bit.OV)
+        if (ram_reg_309.REG_BSTATUS1.bits.OV)
             fault = 0x07;
-        if (regRam.BSTATUS1.Bit.OCC)
+        if (ram_reg_309.REG_BSTATUS1.bits.OCC)
             fault = 0x08;
-        if (regRam.BSTATUS2.Bit.UTD)
+        if (ram_reg_309.REG_BSTATUS2.bits.UTD)
             fault = 0x09;
         sif_report.public.fault = fault;
     }
@@ -840,23 +791,23 @@ void sif_send_PRIVATE_PACKETS_REALTIME_INFO(void)
         }
 #endif
         uint8_t fault = 0;
-        if (regRam.BSTATUS1.Bit.OCD2)
+        if (ram_reg_309.REG_BSTATUS1.bits.OCD2)
             fault = 0x01;
-        if (regRam.BSTATUS1.Bit.OCD1)
+        if (ram_reg_309.REG_BSTATUS1.bits.OCD1)
             fault = 0x02;
-        if (regRam.BSTATUS2.Bit.UTC)
+        if (ram_reg_309.REG_BSTATUS2.bits.UTC)
             fault = 0x03;
-        if (regRam.BSTATUS2.Bit.OTC)
+        if (ram_reg_309.REG_BSTATUS2.bits.OTC)
             fault = 0x04;
-        if (regRam.BSTATUS2.Bit.OTD)
+        if (ram_reg_309.REG_BSTATUS2.bits.OTD)
             fault = 0x05;
-        if (regRam.BSTATUS1.Bit.UV)
+        if (ram_reg_309.REG_BSTATUS1.bits.UV)
             fault = 0x06;
-        if (regRam.BSTATUS1.Bit.OV)
+        if (ram_reg_309.REG_BSTATUS1.bits.OV)
             fault = 0x07;
-        if (regRam.BSTATUS1.Bit.OCC)
+        if (ram_reg_309.REG_BSTATUS1.bits.OCC)
             fault = 0x08;
-        if (regRam.BSTATUS2.Bit.UTD)
+        if (ram_reg_309.REG_BSTATUS2.bits.UTD)
             fault = 0x09;
         sif_report.private.realTimeInfo.fault = fault;
     }
@@ -870,14 +821,15 @@ void sif_send_PRIVATE_PACKETS_REALTIME_INFO(void)
 
     {
         uint8_t bms_status = 0;
-        if (!isFault_chg())
-            bms_status |= 1 << 0;
-        if (0 == GPIO_PinInGet(SL_EMLIB_GPIO_INIT_CHG_5V_WK_PORT, SL_EMLIB_GPIO_INIT_CHG_5V_WK_PIN))
-            bms_status |= 1 << 2;
-        if (sys_status == s_CHG && !isFault_chg())
-            bms_status |= 1 << 7;
-        else if (!isFault_dsg())
-            bms_status |= 1 << 6;
+        //todo
+        // if (!isFault_chg())
+        //     bms_status |= 1 << 0;
+        // if (0 == GPIO_PinInGet(SL_EMLIB_GPIO_INIT_CHG_5V_WK_PORT, SL_EMLIB_GPIO_INIT_CHG_5V_WK_PIN))
+        //     bms_status |= 1 << 2;
+        // if (sys_status == s_CHG && !isFault_chg())
+        //     bms_status |= 1 << 7;
+        // else if (!isFault_dsg())
+        //     bms_status |= 1 << 6;
 
         sif_report.private.realTimeInfo.bms_status = bms_status;
     }
@@ -888,9 +840,11 @@ void sif_send_PRIVATE_PACKETS_REALTIME_INFO(void)
     sif_report.private.realTimeInfo.u16VCellMaxPosition = g_stCellInfoReport.u16VCellMaxPosition;
     sif_report.private.realTimeInfo.u16VCellMinPosition = g_stCellInfoReport.u16VCellMinPosition;
     sif_report.private.realTimeInfo.Max_feedback_current = __TODO__;
-    sif_report.private.realTimeInfo.Request_charging_voltage = (43 * SNum);
+    sif_report.private.realTimeInfo.Request_charging_voltage = (43 * SeriesNum);
     sif_report.private.realTimeInfo.Request_charging_current = 20;
 
+    //todo
+#if 0
     if (sys_status == s_CHG)
     {
         // if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
@@ -910,6 +864,7 @@ void sif_send_PRIVATE_PACKETS_REALTIME_INFO(void)
             sif_report.private.realTimeInfo.status_charging = 0x04;
         }
     }
+#endif
 
     sif_report.private.realTimeInfo.random_key = __TODO__;
     sif_report.private.realTimeInfo.result_key = __TODO__;
@@ -936,7 +891,6 @@ void sif_send_PRIVATE_PACKETS_REALTIME_INFO(void)
     }
 
     memcpy(&sif_sendArray, &sif_report.private.realTimeInfo, sif_send_length);
-    log_d("realtime info lenth %d", sif_send_length);
     // todo
     // sif_send_start();
 }
@@ -946,15 +900,14 @@ void sif_send_PRIVATE_PACKETS_CELLVOLTAGE(void)
     // static uint16_t
     sif_report.private.vcell.id = 0x3B;
     sif_report.private.vcell.ver = 0x01;
-    sif_report.private.vcell.len = 2 * SNum;
+    sif_report.private.vcell.len = 2 * SeriesNum;
 
-    for (uint8_t i = 0; i < SNum; i++)
+    for (uint8_t i = 0; i < SeriesNum; i++)
         sif_report.private.vcell.arrVoltage[i] = g_stCellInfoReport.u16VCell[i];
 
     sif_report.private.vcell.verify = __TODO__;
 
     sif_send_length = sizeof(sif_report.private.vcell);
-    log_d("cell voltage lenth %d", sif_send_length);
 
     memcpy(&sif_sendArray, &sif_report.private.vcell, sif_send_length);
 
@@ -975,7 +928,6 @@ void sif_send_PRIVATE_PACKETS_BATTARY_CODE_H(void)
     sif_report.private.code.verify = __TODO__;
 
     sif_send_length = sizeof(sif_report.private.code);
-    log_d("battary code lenth %d", sif_send_length);
 
     memcpy(&sif_sendArray, &sif_report.private.code, sif_send_length);
 

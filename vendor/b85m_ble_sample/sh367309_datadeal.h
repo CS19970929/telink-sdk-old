@@ -95,31 +95,86 @@ enum SYSTEM_ERROR_COMMAND {
 	ERROR_STATUS_DSG_SHORT,
 };
 
+#ifdef LIFEPO
+#define AFE_COV           (3780)
+#define AFE_COV_recover   (3500)
+#define AFE_COV_filter     100
+
+#define AFE_CUV           (2500)
+#define AFE_CUV_recover     (2600)
+#define AFE_CUV_filter     (100)
+#else
+#define AFE_COV           (4250)
+#define AFE_COV_recover   (4100)
+#define AFE_COV_filter     100
+
+#define AFE_CUV           (3000)
+#define AFE_CUV_recover     (3100)
+#define AFE_CUV_filter     (100)
+#endif // LIFEPO
+
+#define AFE_OTC           ((55 + 40) * 10)
+#define AFE_OTC_recover     ((50 + 40) * 10)
+#define AFE_OTC_filter      100
+
+#ifdef __FUNC__HEAT__
+#if (AFE_TYPE == sh36xx)
+#define UTC_3           ((-20 + 40) * 10)
+#elif (AFE_TYPE == bq76xx_afe)
+#define UTC_3           ((-28 + 40) * 10)
+#endif
+#else
+#define AFE_UTC           ((0 + 40) * 10)
+#endif // DEBUG
+#define AFE_UTC_recover     ((3 + 40) * 10)
+#define AFE_UTC_filter      100
+
+#define AFE_OTD           ((60 + 40) * 10)
+#define AFE_OTD_recover     ((50 + 40) * 10)
+#define AFE_OTD_filter      100
+
+#define AFE_UTD         ((-20 + 40) * 10)
+#define AFE_UTD_recover     ((-10 + 40) * 10)
+#define AFE_UTD_filter      100
+
+
+#define AFE_OCC1       		(200) 
+#define AFE_OCC1_filter  	(10)
+#define AFE_OCC2       		(200) 
+#define AFE_OCC2_filter  	(10)
+
+#define AFE_ODC1       		(200) 
+#define AFE_ODC1_filter  	(10)
+#define AFE_ODC2       		(200) 
+#define AFE_ODC2_filter  	(10)
+
+
+/*curValue*/  /*defaultValue*/ /*maxValue*/ /*minValue*/
 #define AFE_PARAMETERS_RS485_STRUCTION_DEFAULT  {\
-	/*单节过压*/			4250,	4250,	5000,	1000,\
-	/*单节过压恢复*/		4100,	4100,	5000,	1000,\
-	/*单节过压延时*/		100,	100,	50000,	1,\
-	/*单节低压*/			3000,	3000,	5000,	1000,\
-	/*单节低压恢复*/	3100,	3100,	5000,	1000,\
-	/*单节低压延时*/			200,	200,	50000,	1,\
-	/*一级充电过流*/			2000,	2000,	50000,	10,\
-	/*一级充电过流延时*/100,			100,	50000,	1,\
-	/*二级充电过流*/			CHG_OCC__THIRD,	CHG_OCC__THIRD,	50000,	10,\
-	/*二级充电过流延时*/200,			200,	50000,	1,\
-	/*一级放电过流*/			3000,	3000,	50000,	10,\
-	/*一级放电过流延时*/3500,			3500,	50000,	1,\
-	/*二级放电过流*/			DSG_ODC__THIRD,	DSG_ODC__THIRD,	50000,	10,\
-	/*二级放电过流延时*/200,			200,	50000,	1,\
-	/*充电高温*/			1050,	1050,	2000,	400,\
-	/*充电高温恢复*/			850,	850,	50000,	1,\
-	/*充电低温*/			400,	400,	800,	0,\
-	/*充电低温恢复*/			430,	430,	50000,	1,\
-	/*放电高温*/			1050,	1050,	2000,	400,\
-	/*放电高温恢复*/			950,	950,	50000,	1,\
-	/*放电低温*/			100,	100,	800,	0,\
-	/*放电低温恢复*/			300,	300,	50000,	1,\
-	/*短路电流*/			1100,	1100,	65000,	0,\
-	/*短路延时*/			640,		640,		65000,	0,\
+	/*单节过压*/			AFE_COV,			AFE_COV,			5000,	1000,\
+	/*单节过压恢复*/		AFE_COV_recover,	AFE_COV_recover,	5000,	1000,\
+	/*单节过压延时*/		AFE_COV_filter,		AFE_COV_filter,		50000,	1,\
+	/*单节低压*/			AFE_CUV,			AFE_CUV,			5000,	1000,\
+	/*单节低压恢复*/		AFE_CUV_recover,	AFE_CUV_recover,	5000,	1000,\
+	/*单节低压延时*/		AFE_CUV_filter,		AFE_CUV_filter,		50000,	1,\
+	/*一级充电过流*/		AFE_OCC1,			AFE_OCC1,			50000,	10,\
+	/*一级充电过流延时*/	AFE_OCC1_filter,	AFE_OCC1_filter,	50000,	1,\
+	/*二级充电过流*/		AFE_OCC2,			AFE_OCC2,			50000,	10,\
+	/*二级充电过流延时*/	AFE_OCC2_filter,	AFE_OCC2_filter,	50000,	1,\
+	/*一级放电过流*/		AFE_ODC1,			AFE_ODC1,			50000,	10,\
+	/*一级放电过流延时*/    AFE_ODC1_filter,	AFE_ODC1_filter,	50000,	1,\
+	/*二级放电过流*/		AFE_ODC2,	        AFE_ODC2,			50000,	10,\
+	/*二级放电过流延时*/    AFE_ODC2_filter,	AFE_ODC2_filter,	50000,	1,\
+	/*充电高温*/			AFE_OTC,	       AFE_OTC,				2000,	400,\
+	/*充电高温恢复*/		AFE_OTC_recover,	AFE_OTC_recover,	50000,	1,\
+	/*充电低温*/			AFE_UTC,	       AFE_UTC,				800,	0,\
+	/*充电低温恢复*/		AFE_UTC_recover,	AFE_UTC_recover,	50000,	1,\
+	/*放电高温*/			AFE_OTD,	       AFE_OTD,				2000,	400,\
+	/*放电高温恢复*/		AFE_OTD_recover,	AFE_OTD_recover,	50000,	1,\
+	/*放电低温*/			AFE_UTD,	       AFE_UTD,				800,	0,\
+	/*放电低温恢复*/		AFE_UTD_recover,	AFE_UTD_recover,	50000,	1,\
+	/*短路电流*/			100,	100,	65000,	0,\
+	/*短路延时*/			64,		64,		65000,	0,\
 }
 
 typedef struct {

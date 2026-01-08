@@ -20,7 +20,8 @@ typedef int8_t INT8;
 
 #define FAC_INIT_soc (60)
 // #define CapacityFactory (87)
-#define CapacityFactory (50)
+// #define CapacityFactory (50)
+#define CapacityFactory (180)
 
 typedef enum _CUR {
 CurCHG = 0, CurDSG
@@ -31,17 +32,19 @@ CurCHG = 0, CurDSG
 #define Feed_IWatchDog ;
 #define log_i(...)   ;
 
-
-// typedef const int32_t sc32;  /*!< Read Only */
-// typedef const int16_t sc16;  /*!< Read Only */
-// typedef const int8_t sc8;   /*!< Read Only */
-
-// typedef __IO int32_t  vs32;
-// typedef __IO int16_t  vs16;
-// typedef __IO int8_t   vs8;
-
-// typedef __I int32_t vsc32;  /*!< Read Only */
-// typedef __I int16_t vsc16;  /*!< Read Only */
-// typedef __I int8_t vsc8;   /*!< Read Only */
+#define  RF_EN_PIN              (GPIO_PD4)
+#define  AFE1_PRO_EN_PIN        (GPIO_PD7)
+#define  SW_PIN                 (GPIO_PA0)
+#define  MCC_C_PIN              (GPIO_PA1)
+#define  CHG_IN_PIN              (GPIO_PB1)
+#define  ADC_NTC_PIN              (GPIO_PB4)
+#define  ADC_VBUS_PIN              (GPIO_PB5)
+#define  AFE_CTL_PIN              (GPIO_PB6)
+#define  CHG_WK_PIN              (GPIO_PB7)
+#define  OWC_TX_PIN              (GPIO_PC2)
+#define  OWC_RX_PIN              (GPIO_PC3)
+#define  ADC_NMOS_PIN              (GPIO_PC4)
+#define  ADC_BUSEN_PIN              (GPIO_PD2)
+#define  ADC_EN_PIN              (GPIO_PD3)
 
 #endif

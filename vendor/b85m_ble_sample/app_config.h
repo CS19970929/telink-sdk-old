@@ -73,7 +73,7 @@
 
 ///////////////////////// DEBUG  Configuration ////////////////////////////////////////////////
 #define DEBUG_GPIO_ENABLE								0
-#define UART_PRINT_DEBUG_ENABLE  						1
+#define UART_PRINT_DEBUG_ENABLE  						0
 #define	DEBUG_TERMINATE_CNT_EN							0
 
 
@@ -105,7 +105,7 @@
 #endif
 
 #ifndef	UI_LED_ENABLE
-#define UI_LED_ENABLE									1
+#define UI_LED_ENABLE									0
 #endif
 
 
