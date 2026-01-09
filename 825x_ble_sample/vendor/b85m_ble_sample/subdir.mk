@@ -11,7 +11,8 @@ C_SRCS += \
 ../vendor/b85m_ble_sample/main.c \
 ../vendor/b85m_ble_sample/param.c \
 ../vendor/b85m_ble_sample/sh367309_datadeal.c \
-../vendor/b85m_ble_sample/sif_send.c 
+../vendor/b85m_ble_sample/sif_send.c \
+../vendor/b85m_ble_sample/soc_kv_store.c 
 
 OBJS += \
 ./vendor/b85m_ble_sample/SocEnhance.o \
@@ -21,7 +22,8 @@ OBJS += \
 ./vendor/b85m_ble_sample/main.o \
 ./vendor/b85m_ble_sample/param.o \
 ./vendor/b85m_ble_sample/sh367309_datadeal.o \
-./vendor/b85m_ble_sample/sif_send.o 
+./vendor/b85m_ble_sample/sif_send.o \
+./vendor/b85m_ble_sample/soc_kv_store.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes

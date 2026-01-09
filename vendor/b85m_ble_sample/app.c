@@ -63,6 +63,7 @@
 #include "sci_upper.h"
 #include "SocEnhance.h"
 #include "sif_send.h"
+#include "soc_kv_store.h"
 
 extern SH367309_REG_STORE SH367309_Reg_Store;
 
@@ -1023,7 +1024,6 @@ void user_init_normal(void)
 			gpio_write(OWC_TX_PIN, 0);
 		}
 
-		soc_param_lib_init(__INIT_SOC__);
 		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
 
 		adc_app_ch_cfg_t cfg[ADC_APP_CH_MAX] = {
@@ -1037,6 +1037,10 @@ void user_init_normal(void)
 		cpu_set_gpio_wakeup(CHG_IN_PIN, Level_Low, 1);
 		cpu_set_gpio_wakeup(SW_PIN, Level_Low, 1);
 		printf("init\n");
+		soc_kv_store_init();
+		soc_kv_data_t d = soc_kv_store_get();
+		d.soc = 100;
+		soc_param_lib_init(&d);
 	}
 }
 
@@ -1633,6 +1637,7 @@ extern void AFE_Sleep(void);
 #endif
 		}
 	}
+	soc_kv_store_update_and_log_if_changed(SOC_Calculate_Element.u8SOC_Now, SOC_Calculate_Element.u8DSG_SOC_Int, SOC_Calculate_Element.u32Cycle_times);
 
 	blt_pm_proc();
 ////////////////////////////////////// PM Process /////////////////////////////////

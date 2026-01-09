@@ -1,10 +1,11 @@
-// #include "SocEnhance.h"
+#include "SocEnhance.h"
 // #include "DataDeal.h"
 // #include "EEPROM.h"
 // #include "Sci_Upper.h"
 // #include "main.h"
 #include "conf.h"
 #include "Sci_Upper.h"
+#include "soc_kv_store.h"
 
 extern struct stCell_Info g_stCellInfoReport;
 // #include "soc_module_test.h"
@@ -77,23 +78,6 @@ enum CAP_FULL_STATE
 	CAP_FULL_CALCU,
 	CAP_FULL_SUCCESS,
 	CAP_FULL_FAIL,
-};
-
-struct SOC_CALCULATE_ELEMENT
-{
-	UINT32 u32CapFactory; // ��س�ʼ������(��������)As*10 =        Ah*3600*10
-	UINT32 u32CapChange; // ��������仯	   As*10����������
-	uint8_t u8CHG_AHCalcu_Flag; // ��簲ʱ���ֿ�ʹ�ñ�־
-	uint8_t u8DSG_AHCalcu_Flag; // �ŵ簲ʱ���ֿ�ʹ�ñ�־
-
-	uint8_t u8SOC_Now;	   // ��ǰ���SOC     0��100 Ϊ��������ٷֱ�
-	UINT32 u32CapNow;	   // ���ʣ��������As*10
-	uint8_t u8DSG_SOC_Int; // ѭ������ֻ��ŵ������ѷŵ����������ٷֱȣ�90%��һ��ѭ��
-	UINT32 u32Cycle_times; // ѭ������*100������ֻ��������һ������ֱ�ӵ���ȥ��������̫���EEPROM���ֲ���
-	UINT32 u32CapFull;	   // ���˥����������As*10(SOH)���ҵ���ʾSOHҪ��һ�ģ������
-
-	uint8_t u8SOC_Old; // ��ʼSOC    0-100 Ϊ��������ٷֱ�
-	UINT32 u32CapFull_Cal_As; // �������У�����������As*10
 };
 
 struct SOC_CALCULATE_ELEMENT SOC_Calculate_Element;		 // �ڲ�����ṹ��
@@ -191,16 +175,14 @@ void soc_factory_param_init_first(void)
 #endif
 }
 
-void soc_param_lib_init(uint8_t _soc)
+void soc_param_lib_init(soc_kv_data_t* _soc)
 {
-	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_SOC, &SOC_Calculate_Element.u8SOC_Now);
-	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_DSGSOC_INT, &SOC_Calculate_Element.u8DSG_SOC_Int);
-	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_CYCLES, &SOC_Calculate_Element.u32Cycle_times);
-	// nvm3_readCounter(nvm3_defaultHandle, NVM_KEY_CAPACITY, &SOC_Calculate_Element.u32CapFull);
-	set_calsoc(_soc);
+	set_calsoc(_soc->soc);
 
 	SOC_Calculate_Element.u32CapNow = get_soc_real() * SOC_Calculate_Element.u32CapFull / 100;
+	SOC_Calculate_Element.u8DSG_SOC_Int = _soc->dsg;
 	SOC_Calculate_Element.u32CapFactory = SOC_Calculate_Element.u32CapFull;
+	SOC_Calculate_Element.u32Cycle_times = _soc->cycle;
 
 	back_SOC_Calculate_Element = SOC_Calculate_Element;
 
@@ -599,7 +581,7 @@ void SOC_Cont_AH_Int_DSG(void)
 			if (SOC_Calculate_Element.u8DSG_SOC_Int >= 80)
 			{
 				SOC_Calculate_Element.u8DSG_SOC_Int = 0;
-				SOC_Calculate_Element.u32Cycle_times += 100;
+				SOC_Calculate_Element.u32Cycle_times += 1;
 			}
 		}
 	}
@@ -684,7 +666,7 @@ void SOC_Result_Pass(void)
 
 	g_stCellInfoReport.SocElement.u16CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
 	g_stCellInfoReport.SocElement.u16CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;
-	g_stCellInfoReport.SocElement.u16Cycle_times = SOC_Calculate_Element.u32Cycle_times / 100;
+	g_stCellInfoReport.SocElement.u16Cycle_times = SOC_Calculate_Element.u32Cycle_times;
 }
 
 void bmsParam_save(void)
@@ -980,7 +962,7 @@ void APP_SOC_IntEnhance_Ctrl()
 
 	// soc_cali();
 
-	SOC_EEPROM_Deal_Monitor();
+	// SOC_EEPROM_Deal_Monitor();
 	// Correction_CapacityFull();
 
 	SOC_Result_Pass();
