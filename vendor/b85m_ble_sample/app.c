@@ -686,18 +686,20 @@ _attribute_ram_code_ void blt_pm_proc(void)
 				if (++sleep_cnt >= 5)
 				{
 					sleep_cnt = 0;
-					printf("0x5v %d\n", gpio_read(CHG_IN_PIN));
-					printf("0xkey %d\n", gpio_read(SW_PIN));
+					// printf("0x5v %d\n", gpio_read(CHG_IN_PIN));
+					// printf("0xkey %d\n", gpio_read(SW_PIN));
 					// gpio_write(AFE_CTL_PIN, 0);
 					AFE_Sleep();
 					cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0); // deepsleep
 				}
 			}
 		}
-		else if (g_stCellInfoReport.u16VCellMin <= 3000)
+		if (g_stCellInfoReport.u16VCellMin <= 3000)
 		{
-			if (++sleep_vlow_cnt >= 5)
+			if (++sleep_vlow_cnt >= (60))
 			{
+				cpu_set_gpio_wakeup(SW_PIN, Level_Low, 0);
+
 				sleep_vlow_cnt = 0;
 				AFE_Sleep();
 				cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0); // deepsleep
@@ -1589,7 +1591,7 @@ void main_loop(void)
 		uint16_t v0 = adc_app_get_mv(ADC_APP_CH0);
 		uint16_t v1 = adc_app_get_mv(ADC_APP_CH1);
 		uint16_t v2 = adc_app_get_mv(ADC_APP_CH2);
-		// printf("adc %d %d %d", v0, v1, v2);
+		printf("adc %d %d %d", v0, v1, v2);
 		charger_detect_and_keyLogi_200ms();
 
 #if 0

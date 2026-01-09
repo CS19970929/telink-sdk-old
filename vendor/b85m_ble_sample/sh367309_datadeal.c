@@ -591,8 +591,7 @@ void Refresh_Parameters(void)
     g_u32CS_Res_AFE = 2 * 1000 / 2;
     // g_u32CS_Res_AFE = ((u32)g_tParam.other.u16Sys_CS_Res_Num * 1000) / g_tParam.other.u16Sys_CS_Res;
 
-    /* 涓叉暟 */
-    AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = 10 % 16;
+    AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = SeriesNum % 16;
 
 #define __CTLC__
 #ifdef __CTLC__
