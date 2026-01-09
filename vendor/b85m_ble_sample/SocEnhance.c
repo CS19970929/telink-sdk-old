@@ -24,8 +24,8 @@ UINT32 ModulusSub(uint32_t Data1, uint32_t Data2)
 #if 1
 // #define SOC_100_VAL g_tParam.other.u16Soc_V_100
 // #define SOC_0_VAL g_tParam.other.u16Soc_V_0
-#define SOC_100_VAL 	(4180)
-#define SOC_0_VAL 		(3000)
+#define SOC_100_VAL (4150)
+#define SOC_0_VAL (3200)
 
 #define VCELLMAX g_stCellInfoReport.u16VCellMax
 #define VCELLMIN g_stCellInfoReport.u16VCellMin
@@ -175,7 +175,7 @@ void soc_factory_param_init_first(void)
 #endif
 }
 
-void soc_param_lib_init(soc_kv_data_t* _soc)
+void soc_param_lib_init(soc_kv_data_t *_soc)
 {
 	set_calsoc(_soc->soc);
 
@@ -661,7 +661,7 @@ void SOC_Result_Pass(void)
 	// 	g_stCellInfoReport.SocElement.u16Soh = (uint8_t)((100 * SOC_Calculate_Element.u32CapFull / SOC_Calculate_Element.u32CapFactory) & 0xFF);
 	// }
 
-	//todo soh algo
+	// todo soh algo
 	g_stCellInfoReport.SocElement.u16Soh = 100;
 
 	g_stCellInfoReport.SocElement.u16CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
@@ -920,25 +920,37 @@ void SOC_EEPROM_Deal_Monitor(void)
 
 void soc_cali(void)
 {
-#if 0
+	static uint8_t dsg_soc0_delay = 0;
+#define TERNARYLI
 
-#ifdef _SOC_OCV_Fix2_func_
-	SOC_OCV_Fix2();
+#ifdef TERNARYLI
+#define Totle_soc100 (4000)
+#elif (defined(LIFEPO))
+#define Totle_soc100 (3300)
 #endif
 
-#endif
 	if (isCHG())
 	{
-		if (VCELLMAX >= SOC_100_VAL)
+		if ((g_stCellInfoReport.u16VCellMax >= SOC_100_VAL) && g_stCellInfoReport.u16VCellMin >= Totle_soc100)
 		{
-			set_soc_param(100, 1, 1);
+			SOC_Calculate_Element.u8SOC_Now = 100;
+			SOC_Calculate_Element.u32CapNow = SOC_Calculate_Element.u32CapFull;
 		}
 	}
-	if (isDSG())
+	else
 	{
-		if (VCELLMIN <= SOC_0_VAL)
+		if ((g_stCellInfoReport.u16VCellMin <= SOC_0_VAL) && (g_stCellInfoReport.u16VCellMin >= 2000))
 		{
-			set_soc_param(0, 1, 1);
+			if (++dsg_soc0_delay >= (5 * 10))
+			{
+				dsg_soc0_delay = 0;
+				SOC_Calculate_Element.u8SOC_Now = 0;
+				SOC_Calculate_Element.u32CapNow = 0;
+			}
+		}
+		else
+		{
+			dsg_soc0_delay = 0;
 		}
 	}
 }
@@ -960,7 +972,7 @@ void APP_SOC_IntEnhance_Ctrl()
 		break;
 	}
 
-	// soc_cali();
+	soc_cali();
 
 	// SOC_EEPROM_Deal_Monitor();
 	// Correction_CapacityFull();

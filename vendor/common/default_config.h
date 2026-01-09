@@ -79,7 +79,7 @@ extern "C" {
 
 
 #ifndef MODULE_WATCHDOG_ENABLE
-#define MODULE_WATCHDOG_ENABLE	0
+#define MODULE_WATCHDOG_ENABLE	1
 #endif
 
 

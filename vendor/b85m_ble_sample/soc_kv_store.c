@@ -78,9 +78,9 @@ static int rec_is_valid(const u16 *rw)
 static void scan_sector(u32 base, soc_kv_data_t *out, u32 *out_next_off, u8 *out_has_any_valid)
 {
     // 默认值（按你习惯改）
-    out->soc = 51;
+    out->soc = 50;
     out->dsg = 0;
-    out->cycle = 3;
+    out->cycle = 1;
 
     u32 next_off = 0;
     u8 has_any = 0;

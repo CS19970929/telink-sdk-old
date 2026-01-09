@@ -104,7 +104,7 @@ enum SYSTEM_ERROR_COMMAND {
 #define AFE_CUV_recover     (2600)
 #define AFE_CUV_filter     (100)
 #else
-#define AFE_COV           (4250)
+#define AFE_COV           (4200)
 #define AFE_COV_recover   (4100)
 #define AFE_COV_filter     100
 
@@ -173,8 +173,8 @@ enum SYSTEM_ERROR_COMMAND {
 	/*放电高温恢复*/		AFE_OTD_recover,	AFE_OTD_recover,	50000,	1,\
 	/*放电低温*/			AFE_UTD,	       AFE_UTD,				800,	0,\
 	/*放电低温恢复*/		AFE_UTD_recover,	AFE_UTD_recover,	50000,	1,\
-	/*短路电流*/			100,	100,	65000,	0,\
-	/*短路延时*/			64,		64,		65000,	0,\
+	/*短路电流*/			200,	200,	65000,	0,\
+	/*短路延时*/			256,		256,		65000,	0,\
 }
 
 typedef struct {

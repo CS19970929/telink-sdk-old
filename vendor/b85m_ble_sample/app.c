@@ -64,6 +64,40 @@
 #include "SocEnhance.h"
 #include "sif_send.h"
 #include "soc_kv_store.h"
+struct SYSTEM_ERROR
+{
+	UINT8 u8ErrFlag_Com_AFE1;
+	UINT8 u8ErrFlag_Com_AFE2;
+	UINT8 u8ErrFlag_Com_Can;
+	UINT8 u8ErrFlag_Com_EEPROM;
+
+	UINT8 u8ErrFlag_Com_SPI;
+	UINT8 u8ErrFlag_Com_Upper;
+	UINT8 u8ErrFlag_Com_Client;
+	UINT8 u8ErrFlag_Com_Screen;
+
+	UINT8 u8ErrFlag_Com_Wifi;
+	UINT8 u8ErrFlag_Com_BlueTooth;
+	UINT8 u8ErrFlag_Com_App;
+	UINT8 u8ErrFlag_CBC_CHG;
+
+	UINT8 u8ErrFlag_Store_EEPROM;
+	UINT8 u8ErrFlag_HSE;
+	UINT8 u8ErrFlag_LSE;
+	UINT8 u8ErrFlag_Vdelta_OVER;
+
+	UINT8 u8ErrFlag_Balanced;
+	UINT8 u8ErrFlag_ADC;
+	UINT8 u8ErrFlag_Heat;
+	UINT8 u8ErrFlag_Cool;
+
+	UINT8 u8ErrFlag_CBC_DSG;
+	UINT8 u8ErrFlag_SOC_Cail;
+	UINT8 u8ErrFlag_TempBreak;
+	UINT8 u8ErrFlag_DsgShort;
+};
+
+volatile struct SYSTEM_ERROR System_ErrFlag;
 
 extern SH367309_REG_STORE SH367309_Reg_Store;
 
@@ -99,6 +133,75 @@ static GPIO_PinTypeDef s_adc_gpio_tab[10] = {
 	GPIO_PB0, GPIO_PB1, GPIO_PB2, GPIO_PB3,
 	GPIO_PB4, GPIO_PB5, GPIO_PB6, GPIO_PB7,
 	GPIO_PC4, GPIO_PC5};
+
+typedef struct
+{
+	int16_t temp; // 0.1℃
+	uint32_t ohm; // Ω
+} ntc_t;
+
+static const ntc_t ntc_10k_tab[] = {
+	{-200, 69434},
+	{-100, 66089},
+	{0, 27513},
+	{100, 18016},
+	{200, 12092},
+	{250, 10000},
+	{300, 8314},
+	{400, 5838},
+	{500, 4310},
+	{600, 3147},
+	{700, 2310},
+	{800, 1730},
+};
+#define NTC_TAB_SIZE (sizeof(ntc_10k_tab) / sizeof(ntc_10k_tab[0]))
+
+#define NTC_RPULL_OHM 10000
+#define NTC_VREF_MV 3300 // 如果是接 3.3V 上拉
+
+static uint32_t ntc_adc_to_res_ohm(uint32_t adc_mv)
+{
+    uint32_t num;
+    uint32_t den;
+
+    if (adc_mv <= 1) return 1000000;         // open
+    if (adc_mv >= NTC_VREF_MV - 1) return 1; // short
+
+    num = NTC_RPULL_OHM * adc_mv;           // <= 33,000,000 fits in uint32
+    den = (NTC_VREF_MV - adc_mv);
+
+    return num / den;
+}
+
+static int16_t ntc_res_to_temp_01c(uint32_t r)
+{
+	if (r >= ntc_10k_tab[0].ohm)
+		return ntc_10k_tab[0].temp;
+	if (r <= ntc_10k_tab[NTC_TAB_SIZE - 1].ohm)
+		return ntc_10k_tab[NTC_TAB_SIZE - 1].temp;
+
+	for (int i = 0; i < NTC_TAB_SIZE - 1; i++)
+	{
+		uint32_t r1 = ntc_10k_tab[i].ohm;
+		uint32_t r2 = ntc_10k_tab[i + 1].ohm;
+
+		if (r <= r1 && r >= r2)
+		{
+			int32_t t1 = ntc_10k_tab[i].temp;
+			int32_t t2 = ntc_10k_tab[i + 1].temp;
+
+			// 线性插值
+			return t1 + (t2 - t1) * (int32_t)(r1 - r) / (int32_t)(r1 - r2);
+		}
+	}
+	return 250; // fallback 25℃
+}
+
+int16_t ntc_adc_mv_to_temp_01c(uint32_t adc_mv)
+{
+	uint32_t r = ntc_adc_to_res_ohm(adc_mv);
+	return ntc_res_to_temp_01c(r);
+}
 
 /* pin -> B0P(1) ... C5P(10) */
 static uint8_t adc_pin_to_inpch(GPIO_PinTypeDef pin)
@@ -184,6 +287,20 @@ static void adc_demo_style_init_common(void)
 
 	/* Step4: power on sar adc */
 	adc_power_on_sar_adc(1);
+}
+
+// adc_mv  : ADC采样值(mV)
+// vref_mv : 上拉电阻所接电源(mV)，例如 3300 或 1200
+// r_pull  : 上拉电阻 (Ω)，你的 = 10000
+static uint32_t ntc_calc_res_ohm(uint32_t adc_mv, uint32_t vref_mv, uint32_t r_pull)
+{
+	if (adc_mv == 0)
+		return 10000000; // 开路
+	if (adc_mv >= vref_mv)
+		return 1; // 短路
+
+	// Rntc = Rpull * Vadc / (Vref - Vadc)
+	return (r_pull * adc_mv) / (vref_mv - adc_mv);
 }
 
 /* ============ 7) 对外 API ============ */
@@ -369,6 +486,16 @@ const u8 tbl_scanRsp[] = {
 	'a',
 	'r',
 };
+
+// adc_mv: ADC 引脚电压(mV)
+int16_t ntc_adc_to_temp_01c(uint32_t adc_mv)
+{
+	const uint32_t VREF_MV = 3300; // 你的NTC上拉电源
+	const uint32_t RPULL = 10000;  // 10k
+
+	uint32_t r_ntc = ntc_calc_res_ohm(adc_mv, VREF_MV, RPULL);
+	return ntc_res_to_temp_01c(r_ntc);
+}
 
 _attribute_data_retention_ int device_in_connection_state;
 _attribute_data_retention_ u32 advertise_begin_tick;
@@ -971,7 +1098,10 @@ void user_init_normal(void)
 		gpio_set_input_en(AFE1_PRO_EN_PIN, 0);
 		gpio_set_output_en(AFE1_PRO_EN_PIN, 1);
 
+		AFE_Reset();
+		AFE_IsReady();
 		SH367309_UpdataAfeConfig();
+		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
 		// ctl
 		gpio_set_func(AFE_CTL_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
 		gpio_set_input_en(AFE_CTL_PIN, 0);
@@ -1039,7 +1169,7 @@ void user_init_normal(void)
 		printf("init\n");
 		soc_kv_store_init();
 		soc_kv_data_t d = soc_kv_store_get();
-		d.soc = 100;
+		// d.soc = 100;
 		soc_param_lib_init(&d);
 	}
 }
@@ -1357,6 +1487,7 @@ void notify_protect_status(void)
 	INT8 k;
 	UINT8 a[4];
 	UINT16 i = 0, j;
+	UINT16 u16SciTemp;
 	// printf(" notify_protect_status");
 	int len = 3 + 21 * 2 + 2;
 	test_buf[0] = 0x01;
@@ -1400,6 +1531,18 @@ void notify_protect_status(void)
 	}
 	protect_status[7] = (Fault_record_Third2[a[0]] << 8) | Fault_record_Third2[a[1]];
 	protect_status[8] = (Fault_record_Third2[a[2]] << 8) | Fault_record_Third2[a[3]];
+	i = 8;
+	System_ErrFlag.u8ErrFlag_Com_AFE1 = 2;
+	System_ErrFlag.u8ErrFlag_CBC_DSG = 1;
+	protect_status[18] = 0xffff;
+	protect_status[19] = 0xffff;
+	protect_status[20] = 0xffff;
+	// for (j = 0; j < 12; j++)
+	// { // 0xD002�����
+	// 	u16SciTemp = ((*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j)) << 8) | (*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j + 1));
+	// 	protect_status[i++] = (u16SciTemp >> 8) & 0x00FF;
+	// 	protect_status[i++] = u16SciTemp & 0x00FF;
+	// }
 
 	for (i = 0; i < 21; i++)
 	{
@@ -1595,7 +1738,20 @@ void main_loop(void)
 		uint16_t v0 = adc_app_get_mv(ADC_APP_CH0);
 		uint16_t v1 = adc_app_get_mv(ADC_APP_CH1);
 		uint16_t v2 = adc_app_get_mv(ADC_APP_CH2);
-		printf("adc %d %d %d", v0, v1, v2);
+		uint32_t adc_ntc1_mv = v0; // NTC1
+		uint32_t adc_ntc2_mv = v2; // NTC2
+
+		// int16_t temp1_01c = ntc_adc_to_temp_01c(adc_ntc1_mv);
+		// int16_t temp2_01c = ntc_adc_to_temp_01c(adc_ntc2_mv);
+
+		// uint32_t adc_ntc1_mv = adc_sample_and_get_result();
+		// uint32_t adc_ntc2_mv = adc_sample_and_get_result();
+
+		int16_t temp1 = ntc_adc_mv_to_temp_01c(adc_ntc1_mv);
+		int16_t temp2 = ntc_adc_mv_to_temp_01c(adc_ntc2_mv);
+
+		printf("adc %d %d %d\n", v0, v1, v2);
+		printf("temp1 %d temp2 %d", temp1, temp2);
 		charger_detect_and_keyLogi_200ms();
 
 #if 0

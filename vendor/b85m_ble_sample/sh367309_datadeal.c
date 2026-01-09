@@ -694,7 +694,7 @@ void AFE_Reset(void)
     }
     */
 
-    if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
+    // if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
     {
         // if (!MTPWrite(0xEA, 1, WrBuf))
         // { // 0xEA, 0xC0?A CRC
