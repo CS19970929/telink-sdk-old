@@ -73,7 +73,7 @@
 
 ///////////////////////// DEBUG  Configuration ////////////////////////////////////////////////
 #define DEBUG_GPIO_ENABLE								0
-#define UART_PRINT_DEBUG_ENABLE  						0
+#define UART_PRINT_DEBUG_ENABLE  						1
 #define	DEBUG_TERMINATE_CNT_EN							0
 
 
@@ -97,7 +97,7 @@
 
 
 #ifndef	UI_KEYBOARD_ENABLE
-#define UI_KEYBOARD_ENABLE								1
+#define UI_KEYBOARD_ENABLE								0
 #endif
 
 #ifndef	UI_BUTTON_ENABLE

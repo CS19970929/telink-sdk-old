@@ -439,7 +439,7 @@ int module_onReceiveData(void *para)
 		MODS_Poll(data, len);
 
 		rev_cnt++;
-		printf("rev cnt %d", rev_cnt);
+		// printf("rev cnt %d", rev_cnt);
 		MODS_Poll(data, len);
 		// array_printf(data, len);
 		// if(addr == 0xd000)

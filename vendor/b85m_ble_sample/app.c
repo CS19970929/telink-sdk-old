@@ -648,7 +648,7 @@ _attribute_ram_code_ void app_timer_test_irq_proc(void)
 		if (timer0_irq_cnt >= 200)
 		{
 			timer0_irq_cnt = 0;
-			gpio_toggle(GPIO_PC3);
+			// gpio_toggle(GPIO_PC3);
 		}
 		// DBG_CHN0_TOGGLE;
 	}
@@ -673,6 +673,37 @@ _attribute_ram_code_ void app_timer_test_irq_proc(void)
  */
 _attribute_ram_code_ void blt_pm_proc(void)
 {
+	static u16 sleep_cnt = 0;
+	static u16 sleep_vlow_cnt = 0;
+	_attribute_data_retention_ static u32 sleep_tick = 0;
+	if (clock_time_exceed(sleep_tick, 1000 * 1000))
+	{
+		sleep_tick = clock_time();
+		if (gpio_read(CHG_IN_PIN))
+		{
+			if (gpio_read(SW_PIN))
+			{
+				if (++sleep_cnt >= 5)
+				{
+					sleep_cnt = 0;
+					printf("0x5v %d\n", gpio_read(CHG_IN_PIN));
+					printf("0xkey %d\n", gpio_read(SW_PIN));
+					// gpio_write(AFE_CTL_PIN, 0);
+					AFE_Sleep();
+					cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0); // deepsleep
+				}
+			}
+		}
+		else if (g_stCellInfoReport.u16VCellMin <= 3000)
+		{
+			if (++sleep_vlow_cnt >= 5)
+			{
+				sleep_vlow_cnt = 0;
+				AFE_Sleep();
+				cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0); // deepsleep
+			}
+		}
+	}
 #if (BLE_APP_PM_ENABLE)
 	if (!ota_is_working)
 	{
@@ -899,22 +930,22 @@ void user_init_normal(void)
 	bls_pm_setSuspendMask(SUSPEND_DISABLE);
 #endif
 
-#if (UI_KEYBOARD_ENABLE)
-	/////////// keyboard gpio wakeup init ////////
-	u32 pin[] = KB_DRIVE_PINS;
-	for (int i = 0; i < (sizeof(pin) / sizeof(*pin)); i++)
-	{
-		cpu_set_gpio_wakeup(pin[i], Level_High, 1); // drive pin pad high wakeup deepsleep
-	}
+	// #if (UI_KEYBOARD_ENABLE)
+	// 	/////////// keyboard gpio wakeup init ////////
+	// 	u32 pin[] = KB_DRIVE_PINS;
+	// 	for (int i = 0; i < (sizeof(pin) / sizeof(*pin)); i++)
+	// 	{
+	// 		cpu_set_gpio_wakeup(pin[i], Level_High, 1); // drive pin pad high wakeup deepsleep
+	// 	}
 
-	bls_app_registerEventCallback(BLT_EV_FLAG_GPIO_EARLY_WAKEUP, &proc_keyboard);
-#elif (UI_BUTTON_ENABLE)
+	// 	bls_app_registerEventCallback(BLT_EV_FLAG_GPIO_EARLY_WAKEUP, &proc_keyboard);
+	// #elif (UI_BUTTON_ENABLE)
 
-	cpu_set_gpio_wakeup(SW1_GPIO, Level_Low, 1); // button pin pad low wakeUp suspend/deepSleep
-	cpu_set_gpio_wakeup(SW2_GPIO, Level_Low, 1); // button pin pad low wakeUp suspend/deepSleep
+	// 	cpu_set_gpio_wakeup(SW1_GPIO, Level_Low, 1); // button pin pad low wakeUp suspend/deepSleep
+	// 	cpu_set_gpio_wakeup(SW2_GPIO, Level_Low, 1); // button pin pad low wakeUp suspend/deepSleep
 
-	bls_app_registerEventCallback(BLT_EV_FLAG_GPIO_EARLY_WAKEUP, &proc_button);
-#endif
+	// 	bls_app_registerEventCallback(BLT_EV_FLAG_GPIO_EARLY_WAKEUP, &proc_button);
+	// #endif
 
 	advertise_begin_tick = clock_time();
 
@@ -1000,6 +1031,10 @@ void user_init_normal(void)
 		};
 
 		adc_app_init(cfg);
+
+		cpu_set_gpio_wakeup(CHG_IN_PIN, Level_Low, 1);
+		cpu_set_gpio_wakeup(SW_PIN, Level_Low, 1);
+		printf("init\n");
 	}
 }
 
@@ -1058,6 +1093,7 @@ void charger_detect_and_keyLogi_200ms(void)
  */
 _attribute_ram_code_ void user_init_deepRetn(void)
 {
+#if 0
 #if (PM_DEEPSLEEP_RETENTION_ENABLE)
 
 	blc_ll_initBasicMCU(); // mandatory
@@ -1082,6 +1118,7 @@ _attribute_ram_code_ void user_init_deepRetn(void)
 	cpu_set_gpio_wakeup(SW2_GPIO, Level_Low, 1); // button pin pad low wakeUp suspend/deepSleep
 #endif
 
+#endif
 #endif
 }
 
@@ -1552,7 +1589,7 @@ void main_loop(void)
 		uint16_t v0 = adc_app_get_mv(ADC_APP_CH0);
 		uint16_t v1 = adc_app_get_mv(ADC_APP_CH1);
 		uint16_t v2 = adc_app_get_mv(ADC_APP_CH2);
-		printf("adc %d %d %d", v0, v1, v2);
+		// printf("adc %d %d %d", v0, v1, v2);
 		charger_detect_and_keyLogi_200ms();
 
 #if 0
@@ -1595,9 +1632,10 @@ extern void AFE_Sleep(void);
 		}
 	}
 
+	blt_pm_proc();
 ////////////////////////////////////// PM Process /////////////////////////////////
 #if (UI_KEYBOARD_ENABLE)
-	// blt_pm_proc();
+	blt_pm_proc();
 #elif (UI_BUTTON_ENABLE)
 	if (button_not_released)
 	{

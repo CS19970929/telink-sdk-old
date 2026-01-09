@@ -37,7 +37,6 @@ void LoadParam(void)
 {
 #ifdef PARAM_SAVE_TO_FLASH
 	/* 读取CPU Flash中的参数 */
-	printf("init\n");
 	// flash_read_page(PARAM_ADDR, (u8 *)&g_tParam, sizeof(PARAM_T));
 	flash_read_page(PARAM_ADDR, sizeof(PARAM_T), (u8 *)&g_tParam);
 	printf("paramVer = %d", g_tParam.ParamVer);
