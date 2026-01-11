@@ -1229,38 +1229,20 @@ void charger_detect_and_keyLogi_200ms(void)
  */
 _attribute_ram_code_ void user_init_deepRetn(void)
 {
-#if 0
 #if (PM_DEEPSLEEP_RETENTION_ENABLE)
-
-	blc_ll_initBasicMCU(); // mandatory
-	rf_set_power_level_index(MY_RF_POWER_INDEX);
-
+	blc_ll_initBasicMCU();
 	blc_ll_recoverDeepRetention();
-
-	DBG_CHN0_HIGH; // debug
-
+	rf_set_power_level_index(MY_RF_POWER_INDEX);
 	irq_enable();
-
-#if (UI_KEYBOARD_ENABLE)
-	/////////// keyboard gpio wakeup init ////////
-	u32 pin[] = KB_DRIVE_PINS;
-	for (int i = 0; i < (sizeof(pin) / sizeof(*pin)); i++)
-	{
-		cpu_set_gpio_wakeup(pin[i], Level_High, 1); // drive pin pad high wakeup deepsleep
-	}
-#elif (UI_BUTTON_ENABLE)
-
-	cpu_set_gpio_wakeup(SW1_GPIO, Level_Low, 1); // button pin pad low wakeUp suspend/deepSleep
-	cpu_set_gpio_wakeup(SW2_GPIO, Level_Low, 1); // button pin pad low wakeUp suspend/deepSleep
 #endif
-
-#endif
-#endif
+	i2c_master_test_init();
+	SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+	soc_kv_data_t d = soc_kv_store_get();
+	soc_param_lib_init(&d);
 }
 
 // _attribute_data_retention_ u8 notify_data_test[20] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
 // _attribute_data_retention_ u8 notify_data_test[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,0x08,0x09,0x0a,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30};
-bool rev_master = false;
 
 u8 Sci_CRC16RTU(u8 *pszBuf, u8 unLength)
 {
@@ -1288,6 +1270,36 @@ u8 Sci_CRC16RTU(u8 *pszBuf, u8 unLength)
 	}
 
 	return CRCC;
+}
+
+#define BMS_CMD_QUEUE_SIZE 4
+static u16 bms_cmd_queue[BMS_CMD_QUEUE_SIZE];
+static u8 bms_cmd_q_head;
+static u8 bms_cmd_q_tail;
+static u8 bms_cmd_q_count;
+
+void bms_cmd_enqueue(u16 addr)
+{
+	if (bms_cmd_q_count == BMS_CMD_QUEUE_SIZE)
+	{
+		bms_cmd_q_head = (bms_cmd_q_head + 1) & (BMS_CMD_QUEUE_SIZE - 1);
+		bms_cmd_q_count--;
+	}
+	bms_cmd_queue[bms_cmd_q_tail] = addr;
+	bms_cmd_q_tail = (bms_cmd_q_tail + 1) & (BMS_CMD_QUEUE_SIZE - 1);
+	bms_cmd_q_count++;
+}
+
+int bms_cmd_dequeue(u16 *addr)
+{
+	if (!bms_cmd_q_count)
+	{
+		return 0;
+	}
+	*addr = bms_cmd_queue[bms_cmd_q_head];
+	bms_cmd_q_head = (bms_cmd_q_head + 1) & (BMS_CMD_QUEUE_SIZE - 1);
+	bms_cmd_q_count--;
+	return 1;
 }
 
 #define MAX_TEST_DATA_LEN 1024
@@ -1766,20 +1778,18 @@ extern void AFE_Sleep(void);
 	// storage_poll();        // 闈為樆濉炶疆璇紙榛樿涓嶅仛闀挎摝闄わ級
 	// storage_test_step();   // 娴嬭瘯鍐欏叆锛堥獙璇� KV/LOG 绋冲畾鎬э級
 	{
-		// if(device_in_connection_state && clock_time_exceed(interval_update_tick, 1000*1000))
-		if (device_in_connection_state && rev_master)
+		u16 pending_addr;
+		while (device_in_connection_state && bms_cmd_dequeue(&pending_addr))
 		{
-			extern u16 addr;
-			rev_master = false;
-			if (addr == 0xd000)
+			if (pending_addr == 0xd000)
 				notify_votage();
-			else if (addr == 0x2100)
+			else if (pending_addr == 0x2100)
 				notify_protect_prarm();
-			else if (addr == 0xd026)
+			else if (pending_addr == 0xd026)
 				notify_soc();
-			else if (addr == 0xd115)
+			else if (pending_addr == 0xd115)
 				notify_other_status();
-			else if (addr == 0xd100)
+			else if (pending_addr == 0xd100)
 				notify_protect_status();
 #if 0
 			u8 remain = sizeof(notify_data_test);

@@ -419,46 +419,28 @@ void MODS_Poll(u8 *data, u8 len)
  * @param[in]  para - rf_packet_att_write_t
  * @return     0
  */
-extern bool rev_master ;
 extern u8 test_buf[];
 extern void notify_votage(void);
 extern void notify_protect_prarm(void);
-u16 addr = 0;
+extern u8 Sci_CRC16RTU(u8 *pszBuf, u8 unLength);
+extern void bms_cmd_enqueue(u16 addr);
 u32 rev_cnt = 0;
 int module_onReceiveData(void *para)
 {
 	rf_packet_att_write_t *p = (rf_packet_att_write_t*)para;
 	u8 len = p->l2capLen - 3;
 	u8 *data = (u8 *)&p->value;
-	u8 slave = data[0];
-	u8 cmd   = data[1]; 
-	// u16 addr = (data[2] << 8) | data[3];
-	addr = (data[2] << 8) | data[3];
-	if(len > 0)
+	if(len >= 6)
 	{
-		MODS_Poll(data, len);
-
-		rev_cnt++;
-		// printf("rev cnt %d", rev_cnt);
-		MODS_Poll(data, len);
-		// array_printf(data, len);
-		// if(addr == 0xd000)
-		// 	notify_votage();
-		// else if (addr == 0x2100)
-		// 	notify_protect_prarm();
-
-		// update_my_batVal(addr);
-		
-		// spp_event_t *pEvt =  (spp_event_t *)p;
-		// pEvt->token = 0xFF;
-		// pEvt->paramLen = p->l2capLen + 2;   //l2cap_len + 2 byte (eventId)
-		// pEvt->eventId = 0x07a0;  //data received event
-		// memcpy(pEvt->param, &p->opcode, len + 3);
-
-		// spp_send_data(HCI_FLAG_EVENT_TLK_MODULE, pEvt);
-		// printf("Receive data, handle = %x\r\n", p->handle1 | (p->handle1<<8));
-		// array_printf(&p->value, len);
-		rev_master = true;
+		u16 addr = (data[2] << 8) | data[3];
+		u16 crc_calc = Sci_CRC16RTU(data, len - 2);
+		u16 crc_recv = data[len - 2] | (data[len - 1] << 8);
+		if (crc_calc == crc_recv)
+		{
+			MODS_Poll(data, len);
+			rev_cnt++;
+			bms_cmd_enqueue(addr);
+		}
 	}
 
 	return 0;
@@ -603,5 +585,4 @@ void	my_att_init (void)
 {
 	bls_att_setAttributeTable ((u8 *)my_Attributes);
 }
-
 

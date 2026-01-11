@@ -7,11 +7,115 @@
 int AFE_PARAM_WRITE_Flag = 1;
 int AFE_ResetFlag = 0;
 extern struct stCell_Info g_stCellInfoReport;
+extern volatile struct SYSTEM_ERROR System_ErrFlag;
+extern void AFE_Sleep(void);
 
 UINT32 u32_ChgCur_mA = 0;
 UINT32 u32_DsgCur_mA = 0;
 u8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode);
 volatile union System_Status SystemStatus;
+
+#define AFE_I2C_TIMEOUT_US 5000
+static int afe_comm_fault = 0;
+
+static inline int afe_i2c_wait_done(u32 *t_ref)
+{
+	while (reg_i2c_status & FLD_I2C_CMD_BUSY)
+	{
+		if (clock_time_exceed(*t_ref, AFE_I2C_TIMEOUT_US))
+		{
+			return -1;
+		}
+	}
+	*t_ref = clock_time();
+	return 0;
+}
+
+static int afe_i2c_read_bytes(unsigned int Addr, unsigned int AddrLen, unsigned char *dataBuf, int dataLen)
+{
+	if (dataLen <= 0)
+	{
+		return -1;
+	}
+	u32 t_ref = clock_time();
+	reg_i2c_id &= (~FLD_I2C_WRITE_READ_BIT);
+	if (AddrLen == 0)
+	{
+		reg_i2c_ctrl = (FLD_I2C_CMD_ID | FLD_I2C_CMD_START);
+	}
+	else if (AddrLen == 1)
+	{
+		reg_i2c_adr = (unsigned char)Addr;
+		reg_i2c_ctrl = (FLD_I2C_CMD_ID | FLD_I2C_CMD_ADDR | FLD_I2C_CMD_START);
+	}
+	else if (AddrLen == 2)
+	{
+		reg_i2c_adr = (unsigned char)(Addr >> 8);
+		reg_i2c_do = (unsigned char)Addr;
+		reg_i2c_ctrl = (FLD_I2C_CMD_ID | FLD_I2C_CMD_ADDR | FLD_I2C_CMD_DO | FLD_I2C_CMD_START);
+	}
+	else if (AddrLen == 3)
+	{
+		reg_i2c_adr = (unsigned char)(Addr >> 16);
+		reg_i2c_do = (unsigned char)(Addr >> 8);
+		reg_i2c_di = (unsigned char)(Addr);
+		reg_i2c_ctrl = (FLD_I2C_CMD_ID | FLD_I2C_CMD_ADDR | FLD_I2C_CMD_DO | FLD_I2C_CMD_DI | FLD_I2C_CMD_START);
+	}
+	if (afe_i2c_wait_done(&t_ref))
+	{
+		return -1;
+	}
+	reg_i2c_id |= FLD_I2C_WRITE_READ_BIT;
+	reg_i2c_ctrl = (FLD_I2C_CMD_ID | FLD_I2C_CMD_START);
+	if (afe_i2c_wait_done(&t_ref))
+	{
+		return -1;
+	}
+	int bufIndex = 0;
+	dataLen--;
+	while (dataLen)
+	{
+		reg_i2c_ctrl = (FLD_I2C_CMD_DI | FLD_I2C_CMD_READ_ID);
+		if (afe_i2c_wait_done(&t_ref))
+		{
+			return -1;
+		}
+		dataBuf[bufIndex++] = reg_i2c_di;
+		dataLen--;
+	}
+	reg_i2c_ctrl = (FLD_I2C_CMD_DI | FLD_I2C_CMD_READ_ID | FLD_I2C_CMD_ACK);
+	if (afe_i2c_wait_done(&t_ref))
+	{
+		return -1;
+	}
+	dataBuf[bufIndex] = reg_i2c_di;
+	reg_i2c_ctrl = FLD_I2C_CMD_STOP;
+	if (afe_i2c_wait_done(&t_ref))
+	{
+		return -1;
+	}
+	return 0;
+}
+
+static inline void afe_mark_comm_error(void)
+{
+	if (!afe_comm_fault)
+	{
+		afe_comm_fault = 1;
+		System_ErrFlag.u8ErrFlag_Com_AFE1 = 1;
+		AFE_Sleep();
+		System_ERROR_UserCallback(ERROR_AFE1);
+	}
+}
+
+static inline void afe_clear_comm_error(void)
+{
+	if (afe_comm_fault)
+	{
+		afe_comm_fault = 0;
+	}
+	System_ErrFlag.u8ErrFlag_Com_AFE1 = 0;
+}
 
 UINT8 FaultPoint_First2;
 UINT8 FaultPoint_Second2;
@@ -1481,7 +1585,12 @@ void App_AFEGet(void)
     // WaitMs(100);   //1 S
     // i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len + 1);
     // i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len);
-    i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)&ram_reg_309, len);
+    if (afe_i2c_read_bytes(((u16)addr << 8) | len, 2, (unsigned char *)&ram_reg_309, len) != 0)
+    {
+        afe_mark_comm_error();
+        return;
+    }
+    afe_clear_comm_error();
 
     UpdateVoltageFromBqMaximo();
 
@@ -1501,4 +1610,3 @@ void AFE_Sleep(void)
 	SH367309_Reg_Store.REG_MTP_CONF.bits.SLEEP = 1;
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
-

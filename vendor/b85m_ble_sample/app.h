@@ -96,4 +96,7 @@ void proc_button (u8 e, u8 *p, int n);
 
 extern int button_not_released;
 
+void bms_cmd_enqueue(u16 addr);
+int bms_cmd_dequeue(u16 *addr);
+
 #endif /* APP_H_ */
