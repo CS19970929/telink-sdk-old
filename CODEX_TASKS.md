@@ -485,3 +485,24 @@ Phase 7（可选）：进入“修复模式”（只有你授权才执行）
 输出：docs/codex/reports/SOC_KV_AUDIT_AND_STORAGE_EXPAND_DESIGN.md
 
 审计 soc_kv_store 现状，指出问题并给出满足 Telink Flash/BLE 限制的参数 KV 与事件日志设计，同时更新 PROGRESS。
+
+
+## Task 19：分析 b85m_module 模板工程并给出借鉴建议
+状态：已完成（2024-05-17）
+输出：docs/codex/reports/B85M_MODULE_ARCHITECTURE_ANALYSIS.md
+
+从目录结构、启动流程、模块范式、BLE 使用、功耗策略等角度审视 b85m_module，并对 BMS 工程的继承/避坑给出完整建议，完成后更新 PROGRESS。
+
+
+## Task 24：分析 iOS 正常/Android 缺帧的问题并给出修复建议
+状态：已完成（2024-05-17）
+输出：docs/codex/reports/BLE_IOS_ANDROID_MISSING_FRAMES_ROOTCAUSE.md
+
+梳理 BLE 承载、找出 Android 漏帧根因（Write 类型、MTU、节流、CCCD 等），并给出承载层增强与可靠性方案，完成后更新 PROGRESS。
+
+
+## Task 25：深度分析 b85m_module 的 SPP/BLE/低功耗框架
+状态：已完成（2024-05-17）
+输出：docs/codex/reports/B85M_MODULE_SPP_BLE_PM_DEEP_DIVE.md
+
+从 SPP 实现、BLE 通讯组织、低功耗调度三个维度解析 b85m_module，并提出可迁移到 BMS 的落地建议，完成后更新 PROGRESS。

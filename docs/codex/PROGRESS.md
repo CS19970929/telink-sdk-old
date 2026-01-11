@@ -20,3 +20,6 @@
 |16 | 已完成 | 2024-05-17 | I2C 安全封装 + 源码（docs/codex/reports/BMS_I2C_SAFE_API_DESIGN_AND_PATCH.md） |
 |17 | 已完成 | 2024-05-17 | I2C 故障注入测试计划 |
 |18 | 已完成 | 2024-05-17 | SOC KV 审计与扩展设计（docs/codex/reports/SOC_KV_AUDIT_AND_STORAGE_EXPAND_DESIGN.md） |
+|19 | 已完成 | 2024-05-17 | b85m_module 架构分析（docs/codex/reports/B85M_MODULE_ARCHITECTURE_ANALYSIS.md） |
+|24 | 已完成 | 2024-05-17 | BLE iOS/Android 缺帧分析（docs/codex/reports/BLE_IOS_ANDROID_MISSING_FRAMES_ROOTCAUSE.md） |
+|25 | 已完成 | 2024-05-17 | b85m_module SPP/BLE/PM 深度解析（docs/codex/reports/B85M_MODULE_SPP_BLE_PM_DEEP_DIVE.md） |
