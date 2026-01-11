@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+
+DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+GRADLE_WRAPPER="$DIR/gradle/wrapper/gradle-wrapper.jar"
+
+if [ ! -f "$GRADLE_WRAPPER" ]; then
+  echo "Gradle wrapper 未找到，请确认仓库完整。" >&2
+  exit 1
+fi
+
+exec "${JAVA_HOME:-$(dirname $(dirname $(readlink -f $(which java))))}/bin/java" \
+  -jar "$GRADLE_WRAPPER" "$@"
