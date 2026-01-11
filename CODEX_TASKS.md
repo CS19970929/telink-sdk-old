@@ -437,3 +437,51 @@ Phase 7（可选）：进入“修复模式”（只有你授权才执行）
 - 只有当我明确允许进入修复模式时才执行此 Task；否则跳过
 
 完成后：回写状态+日期
+
+
+============================================================
+新增专项：Telink I2C 驱动审计
+============================================================
+
+## Task 15：分析 Telink I2C 驱动（使用方法 + 可靠性 + 异常处理能力），并给出 BMS 场景最佳实践
+状态：已完成（2024-05-17）
+输出：docs/codex/reports/TELINK_I2C_DRIVER_RELIABILITY_GUIDE.md
+
+背景：
+- 工程运行在 TLSR8251，通过 I2C 访问 SH367309，通信可靠性直接影响 BMS 安全
+- 需要弄清 SDK 驱动的使用方式、异常能力、与 BLE/低功耗的交互
+
+要求：
+- 按 A/B/C/D 四部分分析（驱动定位、使用方法、可靠性评估、最佳实践）
+- 必须引用源码（路径+函数名）
+- 文末提供结论摘要、BMS 推荐封装 API、测试计划
+- 不修改源码，如需建议补丁需列出最小改动清单
+
+完成后：
+- 输出文档
+- 更新 Task 状态与日期
+- 更新 docs/codex/PROGRESS.md
+
+
+## Task 16：将 Telink I2C 驱动封装为 BMS 安全 API（带超时/重试/恢复/总线释放），并给出集成改动点
+状态：已完成（2024-05-17）
+输出：
+- docs/codex/reports/BMS_I2C_SAFE_API_DESIGN_AND_PATCH.md
+- vendor/b85m_ble_sample/bms_i2c_safe.c
+- vendor/b85m_ble_sample/bms_i2c_safe.h
+
+要求与目标详见文档，须实现读写 API、超时、总线恢复、错误 hook，并提出集成替换建议。完成后更新状态与 PROGRESS。
+
+
+## Task 17：为 BMS I2C 安全封装建立故障注入测试计划与验证脚本/日志点
+状态：已完成（2024-05-17）
+输出：docs/codex/reports/BMS_I2C_FAULT_INJECTION_TEST_PLAN.md
+
+需列出六大故障注入场景、期望结果、日志点、BLE 协同步骤以及逻辑分析仪观测点，测试计划须引用 Task16 API。完成后更新状态与 PROGRESS。
+
+
+## Task 18：审计 soc_kv_store 并设计 KV + 日志扩展方案
+状态：已完成（2024-05-17）
+输出：docs/codex/reports/SOC_KV_AUDIT_AND_STORAGE_EXPAND_DESIGN.md
+
+审计 soc_kv_store 现状，指出问题并给出满足 Telink Flash/BLE 限制的参数 KV 与事件日志设计，同时更新 PROGRESS。
