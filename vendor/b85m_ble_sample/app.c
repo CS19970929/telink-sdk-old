@@ -1633,6 +1633,29 @@ void notify_protect_prarm(void)
 		test_buf,
 		len);
 }
+指令> read 0xD000 0x38
+[信息] 已发送读命令 addr=0xD000 words=56
+指令> [错误] Notify 解析失败：ValueError: CRC 校验失败 calc=0x46CD recv=0x0706 
+raw=01034c
+0c07 0c06 0c07 0c07 0c07 0c07 0c07 0c06 0c07 0c07 
+ee49 ee49 ee49 ee49 ee49 ee49 ee49 ee49 ee49 ee49 
+ee49 ee49 ee49 ee49 ee49 ee49 ee49 ee49 ee49 ee49 
+ee49 ee49 
+0c07 0c06 0001 0002 0001 0c06 0700
+
+
+01 03 4c 
+0c 08 0c 07 0c 07 0c 07 0c 07 0c 07 0c 08 0c 07 0c 07 0c 07 
+ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49
+ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49
+ee 49 ee 49 0c 08 0c 07 00 01 00 02 00 01 00 64
+
+01 03 4c
+0c 07 0c 06 0c 07 0c 07 0c 07 0c 07 0c 07 0c 07 0c 07 0c 07 
+ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49
+ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49 ee 49
+ee 49 ee 49 0c 07 0c 06 00 01 00 02 00 01 00 64 
+7e00
 
 void notify_votage(void)
 {

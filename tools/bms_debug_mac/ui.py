@@ -1,52 +1,52 @@
-"""简单文本 UI：负责输入输出与表格展示。"""
-import asyncio
-from typing import Iterable, List
+"""简单控制台 UI（无第三方依赖）。"""
 
-from rich.console import Console
-from rich.table import Table
+from __future__ import annotations
+
+import asyncio
+from typing import List
+
+from bleak.backends.device import BLEDevice
 
 from protocol import NotifyFrame
 
 
 class ConsoleUI:
-    def __init__(self) -> None:
-        self.console = Console()
-
     def banner(self) -> None:
-        self.console.print("[bold cyan]Telink BMS BLE 调试器[/bold cyan]")
-
-    def info(self, msg: str) -> None:
-        self.console.print(f"[green][信息][/green] {msg}")
-
-    def warn(self, msg: str) -> None:
-        self.console.print(f"[yellow][警告][/yellow] {msg}")
-
-    def error(self, msg: str) -> None:
-        self.console.print(f"[red][错误][/red] {msg}")
-
-    def show_devices(self, devices: List) -> None:
-        table = Table(title="扫描到的设备")
-        table.add_column("序号", justify="right")
-        table.add_column("名称")
-        table.add_column("地址")
-        for i, dev in enumerate(devices):
-            table.add_row(str(i), dev.name or "(无名)", dev.address)
-        if devices:
-            self.console.print(table)
-        else:
-            self.warn("未发现符合条件的设备")
-
-    def show_notify(self, frame: NotifyFrame) -> None:
-        regs = ",".join(f"{v}" for v in frame.registers[:8])
-        if len(frame.registers) > 8:
-            regs += "..."
-        self.console.print(
-            f"[blue]Notify[/blue] 集合={frame.dataset_hint} 长度={len(frame.payload)} Raw={frame.raw.hex()} 数据={regs}"
-        )
+        print("========================================")
+        print(" Telink 8251 BMS BLE 调试工具 (macOS)     ")
+        print(" 命令: scan [sec] | <idx> | connect <idx>")
+        print("       read <addr> <words> | write <addr> <val>")
+        print("       poll start [sec] | poll stop")
+        print("       log on|off | disconnect | quit")
+        print("========================================")
 
     async def ainput(self, prompt: str = "指令> ") -> str:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: input(prompt))
+        # 避免阻塞事件循环
+        return await asyncio.to_thread(input, prompt)
 
+    def info(self, msg: str) -> None:
+        print(f"[信息] {msg}")
 
-__all__ = ["ConsoleUI"]
+    def warn(self, msg: str) -> None:
+        print(f"[警告] {msg}")
+
+    def error(self, msg: str) -> None:
+        print(f"[错误] {msg}")
+
+    def show_devices(self, devices: List[BLEDevice]) -> None:
+        if not devices:
+            self.warn("未扫描到设备")
+            return
+        print("扫描到的设备：")
+        for i, d in enumerate(devices):
+            print(f"  [{i}]  name={d.name!r}  addr={d.address}")
+
+    def show_notify(self, frame: NotifyFrame) -> None:
+        # 给你调试用：打印最关键字段 + 前几个寄存器
+        regs_preview = frame.registers[:12]
+        regs_more = " ..." if len(frame.registers) > 12 else ""
+        print(
+            f"[Notify] addr=0x{frame.addr:02X} func=0x{frame.func:02X} "
+            f"len={len(frame.payload)} dataset={frame.dataset_hint} "
+            f"regs={regs_preview}{regs_more}"
+        )
