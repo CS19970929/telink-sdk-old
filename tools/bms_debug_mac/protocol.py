@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-# Telink NUS/SPP UUID（你现在用的）
+# Telink NUS/SPP UUID（你当前用的）
 SPP_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 SPP_WRITE_UUID   = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
 SPP_NOTIFY_UUID  = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
@@ -71,7 +71,7 @@ def parse_notify_strict(raw: bytes) -> NotifyFrame:
     """
     if len(raw) < 5:
         raise ValueError("帧长度不足(<5)")
-    # CRC 校验
+
     crc_calc = crc16_modbus(raw[:-2])
     crc_recv = raw[-2] | (raw[-1] << 8)
     if crc_calc != crc_recv:
@@ -89,12 +89,12 @@ def parse_notify_strict(raw: bytes) -> NotifyFrame:
     return NotifyFrame(raw=raw, addr=addr, func=func, byte_len=byte_len, payload=payload, registers=regs)
 
 
-def extract_frames_crc_sync(buf: bytearray, max_frame_len: int = 2048) -> List[bytes]:
+def extract_frames_crc_sync(buf: bytearray, max_frame_len: int = 4096) -> List[bytes]:
     """
-    强健切帧：滑窗 + CRC 作为同步器（适配 BLE notify 分包/粘包/偶发丢字节）
+    强健切帧：滑窗 + CRC 同步（适配 BLE notify 分包/粘包/偶发丢字节）
     逻辑帧格式（不含 padding）：
       [addr][func][byte_len][payload...][crc_lo][crc_hi]
-    但链路上可能出现尾随 0x00 padding（1~2字节）。
+    但链路上可能出现尾随 0x00 padding（1~2字节）
     """
     out: List[bytes] = []
 
@@ -107,14 +107,13 @@ def extract_frames_crc_sync(buf: bytearray, max_frame_len: int = 2048) -> List[b
         if base_len < 5 or base_len > max_frame_len:
             return None, 0
 
-        # 尝试 base/base+1/base+2（兼容尾随 0x00）
         for extra in (0, 1, 2):
             total_len = base_len + extra
             if len(buf) - start < total_len:
                 continue
             seg = bytes(buf[start:start + total_len])
 
-            # 剥 extra 内的尾随 0x00
+            # 剥尾部 0x00（最多 extra 个）
             seg2 = seg
             stripped = 0
             while stripped < extra and len(seg2) > 5 and seg2[-1] == 0x00:
@@ -124,7 +123,6 @@ def extract_frames_crc_sync(buf: bytearray, max_frame_len: int = 2048) -> List[b
             if len(seg2) != base_len:
                 continue
 
-            # CRC 校验 seg2
             crc_calc = crc16_modbus(seg2[:-2])
             crc_recv = seg2[-2] | (seg2[-1] << 8)
             if crc_calc == crc_recv:
@@ -139,10 +137,8 @@ def extract_frames_crc_sync(buf: bytearray, max_frame_len: int = 2048) -> List[b
 
         frame, consume = _try_at(i)
         if frame is not None:
-            # 丢掉 i 前的噪声
             if i > 0:
                 del buf[:i]
-            # 丢掉本帧（含 padding）
             del buf[:consume]
             out.append(frame)
             i = 0
@@ -150,7 +146,6 @@ def extract_frames_crc_sync(buf: bytearray, max_frame_len: int = 2048) -> List[b
 
         i += 1
         if i > 512:
-            # 防御：长期不同步时丢弃前半
             del buf[:i]
             i = 0
 
