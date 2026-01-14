@@ -87,7 +87,7 @@ extern "C" {
 
 
 
-#define DRIVER_TEST_MODE								TEST_ADC
+#define DRIVER_TEST_MODE								TEST_UART
 
 
 

@@ -353,15 +353,14 @@ void uart_ndma_send_byte(unsigned char uartData)
  */
 void uart_send_dma(unsigned char* Addr)
 {
-	/*when the state of tx is not busy, tx_done status (0x9e bit[0])=1(default),
-	 * if tx_done irq is enable,first we must clear tx_done status to 0 - "uart_clr_tx_done()",otherwise it always be stuck in the interrupt,
-	 * when tx is truly complete , tx_done status is set to 1,then entry tx_done irq.
-	 */
-	uart_clr_tx_done();
-    reg_dma1_addr = (unsigned short)((unsigned int)Addr); //packet data, start address is sendBuff+1
+    uart_clr_tx_done();
+    reg_dma1_addr = (unsigned short)((unsigned int)Addr);
     reg_dma1_size = 0xff;
-    reg_dma_tx_rdy0	 |= FLD_DMA_CHN_UART_TX;
+
+    reg_dma_chn_en |= FLD_DMA_CHN_UART_TX;   // ✅新增：打开 UART TX DMA 通道
+    reg_dma_tx_rdy0 |= FLD_DMA_CHN_UART_TX;
 }
+
 /**
  * @brief     uart send data function, this  function tell the DMA to get data from the RAM and start
  *            the DMA transmission
@@ -390,22 +389,21 @@ volatile unsigned char uart_dma_send(unsigned char* Addr)
  */
 volatile unsigned char uart_send_byte(unsigned char byte)
 {
-	unsigned int addr;
+    unsigned int addr;
+    static unsigned char b[5] = {1,0,0,0,0}; // ✅必须 static
 
-	unsigned char b[5] = {1, 0,0,0,0};
+    addr = (unsigned int)b;
+    b[4] = byte;
 
-	addr = (unsigned int)b;
-
-	b[4] = byte;
     if (reg_uart_status1 & FLD_UART_TX_DONE ) {
-    	reg_dma1_addr = addr; //packet data, start address is sendBuff+1
-    	reg_dma1_addrHi = ((addr>>16)&0xff);
-        reg_dma_tx_rdy0	 = FLD_DMA_CHN1;
+        reg_dma1_addr = addr;
+        reg_dma1_addrHi = ((addr>>16)&0xff);
+        reg_dma_tx_rdy0 = FLD_DMA_CHN1;
         return 1;
     }
-
     return 0;
 }
+
 
 /**
  * @brief     data receive buffer initiate function. DMA would move received uart data to the address space,
@@ -418,17 +416,18 @@ volatile unsigned char uart_send_byte(unsigned char byte)
 void uart_recbuff_init(unsigned char *RecvAddr, unsigned short RecvBufLen)
 {
     unsigned char bufLen;
-    unsigned int addr;
+    unsigned int addr = (unsigned int)RecvAddr;
 
-    addr = (unsigned int) RecvAddr;
     bufLen = RecvBufLen / 16;
 
-    reg_dma0_addr = addr; //set receive buffer address
-    reg_dma0_addrHi = 0x04;
-    reg_dma0_size = bufLen; //set receive buffer size
+    reg_dma0_addr   = addr;
+    reg_dma0_addrHi = 0x04;          // 旧SDK写死0x04的做法保留
+    reg_dma0_size   = bufLen;
+    reg_dma0_mode   = FLD_DMA_WR_MEM;
 
-    reg_dma0_mode = FLD_DMA_WR_MEM;   //set DMA 0 mode to 0x01 for receive
+    reg_dma_chn_en |= FLD_DMA_CHN_UART_RX;   // ✅新增：打开 UART RX DMA 通道
 }
+
 
 /**
  * @brief     This function determines whether parity error occurs once a packet arrives.
@@ -553,20 +552,17 @@ void uart_set_cts(unsigned char Enable, unsigned char Select,UART_CtsPinDef pin)
 */
 void uart_gpio_set(UART_TxPinDef tx_pin,UART_RxPinDef rx_pin)
 {
-	//When the pad is configured with mux input and a pull-up resistor is required, gpio_input_en needs to be placed before gpio_function_dis,
-	//otherwise first set gpio_input_disable and then call the mux function interface,the mux pad will may misread the short low-level timing.confirmed by minghai.20210709.
-	gpio_set_input_en(tx_pin, 1);
-	gpio_set_input_en(rx_pin, 1);
-	//note: pullup setting must before uart gpio config, cause it will lead to ERR data to uart RX buffer(confirmed by sihui&sunpeng)
-	//PM_PIN_PULLUP_1M   PM_PIN_PULLUP_10K
-	gpio_setup_up_down_resistor(tx_pin, PM_PIN_PULLUP_10K);  //must, for stability and prevent from current leakage
-	gpio_setup_up_down_resistor(rx_pin, PM_PIN_PULLUP_10K);  //must  for stability and prevent from current leakage
+    if(tx_pin != UART_TX_NONE_PIN){
+        gpio_set_input_en(tx_pin, 1);
+        gpio_setup_up_down_resistor(tx_pin, PM_PIN_PULLUP_10K);
+        gpio_set_func(tx_pin, AS_UART);
+    }
 
-
-	gpio_set_func(tx_pin,AS_UART); // set tx pin
-	gpio_set_func(rx_pin,AS_UART); // set rx pin
-
-
+    if(rx_pin != UART_RX_NONE_PIN){
+        gpio_set_input_en(rx_pin, 1);
+        gpio_setup_up_down_resistor(rx_pin, PM_PIN_PULLUP_10K);
+        gpio_set_func(rx_pin, AS_UART);
+    }
 }
 
 /**

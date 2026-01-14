@@ -8,6 +8,10 @@
 #include "stdint.h"
 #include "flash_store_cfg.h"
 
+#define DEV_NAME_STR  "BT_666"
+#define DEV_NAME_LEN  (sizeof(DEV_NAME_STR)-1)
+
+
 typedef uint8_t  UINT8;
 typedef uint16_t UINT16;
 typedef uint32_t UINT32;
@@ -15,9 +19,11 @@ typedef int32_t INT32;
 typedef int16_t INT16;
 typedef int8_t INT8;
 
+
+
 #define __INIT_SOC__        (99)
 
-#define SeriesNum  (13)
+#define SeriesNum  (10)
 
 #define FAC_INIT_soc (60)
 // #define CapacityFactory (87)

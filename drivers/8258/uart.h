@@ -92,26 +92,30 @@ typedef enum {
  */
 
 typedef enum{
-	UART_TX_PA2 = GPIO_PA2,
-	UART_TX_PB1 = GPIO_PB1,
-	UART_TX_PD0 = GPIO_PD0,
-	UART_TX_PD3 = GPIO_PD3,
-	UART_TX_PD7 = GPIO_PD7,
+    UART_TX_PA2 = GPIO_PA2,
+    UART_TX_PB1 = GPIO_PB1,
+    UART_TX_PC2 = GPIO_PC2,   // ✅新增：允许 PC2 做 TX
+    UART_TX_PD0 = GPIO_PD0,
+    UART_TX_PD3 = GPIO_PD3,
+    UART_TX_PD7 = GPIO_PD7,
+    UART_TX_NONE_PIN = 0xfff, // ✅可选：跟新SDK对齐
 }UART_TxPinDef;
+
+
 
 /**
  *  @brief  Define UART RX pin: A0 B0 B7 C3 C5 D6
  */
 
 typedef enum{
-	UART_RX_PA0 = GPIO_PA0,
-	UART_RX_PB0 = GPIO_PB0,
-	UART_RX_PB7 = GPIO_PB7,
-	UART_RX_PC3 = GPIO_PC3,
-	UART_RX_PC5 = GPIO_PC5,
-	UART_RX_PD6 = GPIO_PD6,
+    UART_RX_PA0 = GPIO_PA0,
+    UART_RX_PB0 = GPIO_PB0,
+    UART_RX_PB7 = GPIO_PB7,
+    UART_RX_PC3 = GPIO_PC3,
+    UART_RX_PC5 = GPIO_PC5,
+    UART_RX_PD6 = GPIO_PD6,
+    UART_RX_NONE_PIN = 0xfff, // ✅可选：跟新SDK对齐
 }UART_RxPinDef;
-
 /**
  *  @brief  Define UART RTX pin: C2 D0 D3 D7
  */

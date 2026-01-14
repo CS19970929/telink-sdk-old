@@ -46,13 +46,15 @@
 #include "app_config.h"
 #include "tl_common.h"
 #include "drivers.h"
+#include "modbus_uart.h"
+#include "modbus_rtu.h"
 
 
 #if (DRIVER_TEST_MODE == TEST_UART)
 
 #define UART_DMA  		1     //uart use dma
 #define UART_NDMA  		2     //uart not use dma
-#define UART_MODE		UART_NDMA
+#define UART_MODE		UART_DMA
 
 
 
@@ -104,7 +106,8 @@ void app_uart_test_init(void)
 	//note: dma addr must be set first before any other uart initialization! (confirmed by sihui)
 	uart_recbuff_init( (unsigned char *)&rec_buff, sizeof(rec_buff));
 
-	uart_gpio_set(UART_TX_PB1, UART_RX_PB0);// uart tx/rx pin set
+	// uart_gpio_set(, UART_RX_PB0);// uart tx/rx pin set
+    uart_gpio_set(UART_TX_PC2, UART_RX_PC3);
 
 	uart_reset();  //will reset uart digital registers from 0x90 ~ 0x9f, so uart setting must set after this reset
 
@@ -258,3 +261,32 @@ void app_uart_test_irq_proc(void)
 }
 
 #endif
+
+
+static u8 rsp_buf[268];
+
+void main_loop_modbus(void)
+{
+    u8  *req;
+    u32  req_len;
+
+    if (modbus_uart_poll(&req, &req_len)) {
+
+        u32 rsp_len = 0;
+        if (modbus_on_frame(req, req_len, rsp_buf, &rsp_len)) {
+            if (rsp_len) {
+                modbus_uart_send(rsp_buf, rsp_len);
+            }
+        }
+
+        // 重新 arm RX（强烈建议）
+        extern void modbus_uart_rx_reset(void);
+        modbus_uart_rx_reset();
+    }
+	_attribute_data_retention_ static u32 update_bms_info_tick = 0;
+	if (clock_time_exceed(update_bms_info_tick, 1000 * 200))
+	{
+		update_bms_info_tick = clock_time();
+		uart_dma_send((unsigned char*)&trans_buff);
+	}
+}

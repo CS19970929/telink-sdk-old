@@ -48,6 +48,7 @@
 #include "drivers.h"
 #include "stack/ble/ble.h"
 #include "vendor/common/blt_common.h"
+#include "modbus_uart.h"
 
 
 extern my_fifo_t hci_rx_fifo;
@@ -75,7 +76,8 @@ _attribute_ram_code_ void irq_handler(void)
 
 /***uart demo***/
 #elif (DRIVER_TEST_MODE == TEST_UART)
-	app_uart_test_irq_proc();
+	// app_uart_test_irq_proc();
+	modbus_uart_irq_proc();
 
 /***i2c demo***/
 #elif (DRIVER_TEST_MODE == TEST_IIC)

@@ -92,7 +92,8 @@ void user_init()
 
 #elif (DRIVER_TEST_MODE == TEST_UART)
 
-	app_uart_test_init();
+	// app_uart_test_init();
+	modbus_uart_init();
 
 #elif (DRIVER_TEST_MODE == TEST_IIC)
 
@@ -137,7 +138,9 @@ void main_loop (void)
 {
 #if (DRIVER_TEST_MODE == TEST_UART)
 
-	app_uart_test_start();
+	// app_uart_test_start();
+extern void main_loop_modbus(void);
+	main_loop_modbus();
 
 #elif (DRIVER_TEST_MODE == TEST_IIC)
 

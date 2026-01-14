@@ -64,6 +64,52 @@
 #include "SocEnhance.h"
 #include "sif_send.h"
 #include "soc_kv_store.h"
+#include "modbus.h"
+#include "app_modbus_uart.h"
+
+u8 tbl_advData[31];
+u8 tbl_advDataLen;
+
+u8 tbl_scanRsp[31];
+u8 tbl_scanRspLen;
+
+static void ble_build_adv_scanrsp(void)
+{
+	u8 i = 0;
+
+	// --- ADV: 放 Flags + Appearance + UUID list（建议 ADV 不放名字，名字放 scanRsp） ---
+	i = 0;
+	// Flags: len=2, type=0x01, data=0x05
+	tbl_advData[i++] = 0x02;
+	tbl_advData[i++] = 0x01;
+	tbl_advData[i++] = 0x05;
+
+	// Appearance: len=3, type=0x19, data=0x0180
+	tbl_advData[i++] = 0x03;
+	tbl_advData[i++] = 0x19;
+	tbl_advData[i++] = 0x80;
+	tbl_advData[i++] = 0x01;
+
+	// Incomplete 16-bit UUIDs: len=5, type=0x02, 0x1812, 0x180F
+	tbl_advData[i++] = 0x05;
+	tbl_advData[i++] = 0x02;
+	tbl_advData[i++] = 0x12;
+	tbl_advData[i++] = 0x18;
+	tbl_advData[i++] = 0x0F;
+	tbl_advData[i++] = 0x18;
+
+	tbl_advDataLen = i;
+
+	// --- ScanRsp: 放完整名字 ---
+	i = 0;
+	tbl_scanRsp[i++] = (u8)(DEV_NAME_LEN + 1); // len = type(1)+name
+	tbl_scanRsp[i++] = 0x09;				   // Complete Local Name
+	memcpy(&tbl_scanRsp[i], DEV_NAME_STR, DEV_NAME_LEN);
+	i += DEV_NAME_LEN;
+
+	tbl_scanRspLen = i;
+}
+
 struct SYSTEM_ERROR
 {
 	UINT8 u8ErrFlag_Com_AFE1;
@@ -161,16 +207,18 @@ static const ntc_t ntc_10k_tab[] = {
 
 static uint32_t ntc_adc_to_res_ohm(uint32_t adc_mv)
 {
-    uint32_t num;
-    uint32_t den;
+	uint32_t num;
+	uint32_t den;
 
-    if (adc_mv <= 1) return 1000000;         // open
-    if (adc_mv >= NTC_VREF_MV - 1) return 1; // short
+	if (adc_mv <= 1)
+		return 1000000; // open
+	if (adc_mv >= NTC_VREF_MV - 1)
+		return 1; // short
 
-    num = NTC_RPULL_OHM * adc_mv;           // <= 33,000,000 fits in uint32
-    den = (NTC_VREF_MV - adc_mv);
+	num = NTC_RPULL_OHM * adc_mv; // <= 33,000,000 fits in uint32
+	den = (NTC_VREF_MV - adc_mv);
 
-    return num / den;
+	return num / den;
 }
 
 static int16_t ntc_res_to_temp_01c(uint32_t r)
@@ -447,45 +495,6 @@ _attribute_data_retention_ my_fifo_t blt_txfifo = {
 // 	 0x03, 0x19, 0x80, 0x01, 					// 384, Generic Remote Control, Generic category
 // 	 0x05, 0x02, 0x12, 0x18, 0x0F, 0x18,		// incomplete list of service class UUIDs (0x1812, 0x180F)
 // };
-const u8 tbl_advData[] = {
-	0x05,
-	0x09,
-	'B',
-	'T',
-	'A',
-	'R',
-	0x02,
-	0x01,
-	0x05, // BLE limited discoverable mode and BR/EDR not supported
-	0x03,
-	0x19,
-	0x80,
-	0x01, // 384, Generic Remote Control, Generic category
-	0x05,
-	0x02,
-	0x12,
-	0x18,
-	0x0F,
-	0x18, // incomplete list of service class UUIDs (0x1812, 0x180F)
-};
-
-/**
- * @brief	Scan Response Packet data
- */
-// const u8	tbl_scanRsp [] = {
-// 		 0x08, 0x09, 'v', 'S', 'a', 'm', 'p', 'l', 'e',
-// 	};
-const u8 tbl_scanRsp[] = {
-	0x08,
-	0x09,
-	'B',
-	'T',
-	'n',
-	's',
-	't',
-	'a',
-	'r',
-};
 
 // adc_mv: ADC 引脚电压(mV)
 int16_t ntc_adc_to_temp_01c(uint32_t adc_mv)
@@ -979,6 +988,7 @@ void user_init_normal(void)
 #endif
 
 	///////////////////// USER application initialization ///////////////////
+	ble_build_adv_scanrsp();
 	bls_ll_setAdvData((u8 *)tbl_advData, sizeof(tbl_advData));
 	bls_ll_setScanRspData((u8 *)tbl_scanRsp, sizeof(tbl_scanRsp));
 
@@ -1171,6 +1181,10 @@ void user_init_normal(void)
 		soc_kv_data_t d = soc_kv_store_get();
 		// d.soc = 100;
 		soc_param_lib_init(&d);
+
+extern void app_modbus_uart_init(uint32_t baud);
+		// app_modbus_uart_init(9600);
+		modbus_uart_init();
 	}
 }
 
@@ -1262,7 +1276,7 @@ _attribute_ram_code_ void user_init_deepRetn(void)
 // _attribute_data_retention_ u8 notify_data_test[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,0x08,0x09,0x0a,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30};
 bool rev_master = false;
 
-u8 Sci_CRC16RTU(u8 *pszBuf, u8 unLength)
+u16 Sci_CRC16RTU(u8 *pszBuf, u8 unLength)
 {
 	u16 CRCC = 0XFFFF;
 	u32 CRC_count;
@@ -1467,6 +1481,7 @@ void notify_other_status(void)
 
 	i++;
 	u16 crc = Sci_CRC16RTU(test_buf, len - 2);
+	// u16 crc = 0x3456;
 	test_buf[3 + i * 2] = crc & 0xff;
 	test_buf[4 + i * 2] = crc >> 8;
 
@@ -1552,6 +1567,7 @@ void notify_protect_status(void)
 
 	i++;
 	u16 crc = Sci_CRC16RTU(test_buf, len - 2);
+	// u16 crc = 0x4567;
 	test_buf[3 + i * 2] = crc & 0xff;
 	test_buf[4 + i * 2] = crc >> 8;
 
@@ -1580,6 +1596,7 @@ void notify_soc(void)
 
 	i++;
 	u16 crc = Sci_CRC16RTU(test_buf, len - 2);
+	// u16 crc = 0x2345;
 	test_buf[3 + i * 2] = crc & 0xff;
 	test_buf[4 + i * 2] = crc >> 8;
 
@@ -1679,6 +1696,7 @@ void notify_votage(void)
 			else if (i == 38)
 			{
 				u16 crc = Sci_CRC16RTU(test_buf, len - 2);
+				// u16 crc = 0x1234;
 				test_buf[3 + i * 2] = crc & 0xff;
 				test_buf[4 + i * 2] = crc >> 8;
 			}
@@ -1754,6 +1772,7 @@ void main_loop(void)
 		printf("temp1 %d temp2 %d", temp1, temp2);
 		charger_detect_and_keyLogi_200ms();
 
+
 #if 0
 		if(sleep_en)
 		{
@@ -1763,6 +1782,9 @@ extern void AFE_Sleep(void);
 		}
 #endif
 	}
+	// main_loop_modbus();
+extern void app_modbus_uart_loop(void);
+	app_modbus_uart_loop();
 	// storage_poll();        // 闈為樆濉炶疆璇紙榛樿涓嶅仛闀挎摝闄わ級
 	// storage_test_step();   // 娴嬭瘯鍐欏叆锛堥獙璇� KV/LOG 绋冲畾鎬э級
 	{
@@ -1795,7 +1817,7 @@ extern void AFE_Sleep(void);
 	}
 	soc_kv_store_update_and_log_if_changed(SOC_Calculate_Element.u8SOC_Now, SOC_Calculate_Element.u8DSG_SOC_Int, SOC_Calculate_Element.u32Cycle_times);
 
-	blt_pm_proc();
+	// blt_pm_proc();
 ////////////////////////////////////// PM Process /////////////////////////////////
 #if (UI_KEYBOARD_ENABLE)
 	blt_pm_proc();

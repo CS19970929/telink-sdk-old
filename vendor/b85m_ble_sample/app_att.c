@@ -48,6 +48,7 @@
 #include "stack/ble/ble.h"
 #include "app.h"
 #include "app_att.h"
+#include "conf.h"
 
 typedef struct
 {
@@ -145,7 +146,7 @@ static u16 serviceChangeVal[2] = {0};
 static u8 serviceChangeCCC[2] = {0,0};
 
 // static const u8 my_devName[] = {'t','S','a','m','p','l','e'};
-static const u8 my_devName[] = {'B','T','a','m','p','l','e'};
+static const u8 my_devName[] = DEV_NAME_STR;
 
 static const u8 my_PnPtrs [] = {0x02, 0x8a, 0x24, 0x66, 0x82, 0x01, 0x00};
 
