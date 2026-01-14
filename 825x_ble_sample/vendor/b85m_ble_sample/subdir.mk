@@ -7,11 +7,10 @@ C_SRCS += \
 ../vendor/b85m_ble_sample/SocEnhance.c \
 ../vendor/b85m_ble_sample/app.c \
 ../vendor/b85m_ble_sample/app_att.c \
-../vendor/b85m_ble_sample/app_modbus_uart.c \
 ../vendor/b85m_ble_sample/button.c \
 ../vendor/b85m_ble_sample/main.c \
-../vendor/b85m_ble_sample/modbus.c \
 ../vendor/b85m_ble_sample/modbus_rtu.c \
+../vendor/b85m_ble_sample/modbus_uart.c \
 ../vendor/b85m_ble_sample/param.c \
 ../vendor/b85m_ble_sample/sh367309_datadeal.c \
 ../vendor/b85m_ble_sample/sif_send.c \
@@ -21,11 +20,10 @@ OBJS += \
 ./vendor/b85m_ble_sample/SocEnhance.o \
 ./vendor/b85m_ble_sample/app.o \
 ./vendor/b85m_ble_sample/app_att.o \
-./vendor/b85m_ble_sample/app_modbus_uart.o \
 ./vendor/b85m_ble_sample/button.o \
 ./vendor/b85m_ble_sample/main.o \
-./vendor/b85m_ble_sample/modbus.o \
 ./vendor/b85m_ble_sample/modbus_rtu.o \
+./vendor/b85m_ble_sample/modbus_uart.o \
 ./vendor/b85m_ble_sample/param.o \
 ./vendor/b85m_ble_sample/sh367309_datadeal.o \
 ./vendor/b85m_ble_sample/sif_send.o \

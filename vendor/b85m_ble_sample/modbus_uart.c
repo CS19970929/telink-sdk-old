@@ -3,6 +3,7 @@
 #include "app_config.h"
 #include "tl_common.h"
 #include "drivers.h"
+#include "modbus_rtu.h"
 
 static volatile u8  s_rx_ready = 0;
 
@@ -108,3 +109,41 @@ void modbus_uart_rx_reset(void)
     memset(s_rx_pkt.data, 0, 16); // 可选：只清头部，别全清浪费
     uart_recbuff_init((u8*)&s_rx_pkt, sizeof(s_rx_pkt));
 }
+
+static u8 rsp_buf[268];
+void main_loop_modbus(void)
+{
+	u8 *req;
+	u32 req_len;
+
+	if (modbus_uart_poll(&req, &req_len))
+	{
+
+		u32 rsp_len = 0;
+		if (modbus_on_frame(req, req_len, rsp_buf, &rsp_len))
+		{
+			if (rsp_len)
+			{
+				modbus_uart_send(rsp_buf, rsp_len);
+			}
+		}
+
+		// 重新 arm RX（强烈建议）
+		extern void modbus_uart_rx_reset(void);
+		modbus_uart_rx_reset();
+	}
+	// _attribute_data_retention_ static u32 update_bms_info_tick = 0;
+	// if (clock_time_exceed(update_bms_info_tick, 1000 * 500))
+	// {
+	// 	update_bms_info_tick = clock_time();
+	// 	// uart_dma_send((unsigned char *)&trans_buff);
+	// 	u8 send_buf[10] = {0};
+	// 	for (size_t i = 0; i < 10; i++)
+	// 	{
+	// 		send_buf[i] = 2 * i;
+	// 	}
+		
+	// 	modbus_uart_send(send_buf, sizeof(send_buf));
+	// }
+}
+

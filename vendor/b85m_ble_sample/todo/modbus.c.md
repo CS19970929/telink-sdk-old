@@ -67,19 +67,34 @@ void app_uart_test_init(void)
 
 }
 #endif
-
 void modbus_uart_init(void)
 {
-    uart_reset();
+	WaitMs(2000);  //leave enough time for SWS_reset when power on
+	//note: dma addr must be set first before any other uart initialization! (confirmed by sihui)
+	uart_recbuff_init( (unsigned char *)&g_uart_rx_buf, sizeof(g_uart_rx_buf));
 
-    uart_init_baudrate(MODBUS_BAUD, SYSCLK_HZ, PARITY_EVEN, STOP_BIT_ONE); // 常见 8E1
-    uart_dma_enable(1, 1);
-
+	// uart_gpio_set(, UART_RX_PB0);// uart tx/rx pin set
     uart_gpio_set(UART_TX_PC2, UART_RX_PC3);
 
-    // RX DMA buffer init
-    // 注意：你的 uart_recbuff_init 要按上面的补丁加上 reg_dma_chn_en |= FLD_DMA_CHN_UART_RX
-    uart_recbuff_init(g_uart_rx_buf, sizeof(g_uart_rx_buf));
+	uart_reset();  //will reset uart digital registers from 0x90 ~ 0x9f, so uart setting must set after this reset
+
+	//baud rate: 115200
+	#if (CLOCK_SYS_CLOCK_HZ == 16000000)
+//		uart_init(118, 13, PARITY_NONE, STOP_BIT_ONE);
+		uart_init(9, 13, PARITY_NONE, STOP_BIT_ONE);
+	#elif (CLOCK_SYS_CLOCK_HZ == 24000000)
+		uart_init(249, 9, PARITY_NONE, STOP_BIT_ONE);
+	#endif
+
+	uart_dma_enable(1, 1); 	//uart data in hardware buffer moved by dma, so we need enable them first
+
+	irq_set_mask(FLD_IRQ_DMA_EN);
+	dma_chn_irq_enable(FLD_DMA_CHN_UART_RX | FLD_DMA_CHN_UART_TX, 1);   	//uart Rx/Tx dma irq enable
+
+	uart_irq_enable(0, 0);  	//uart Rx/Tx irq no need, disable them
+
+
+	irq_enable();
 }
 
 #define MODBUS_FRAME_GAP_US  4000   // 9600bps下，3.5字符时间约 ~4ms，取整好用

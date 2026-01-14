@@ -47,7 +47,7 @@
 #include "drivers.h"
 #include "stack/ble/ble.h"
 #include "app.h"
-#include "modbus.h"
+#include "modbus_uart.h"
 
 extern void app_timer_test_irq_proc(void);
 
@@ -59,6 +59,7 @@ extern void app_timer_test_irq_proc(void);
 _attribute_ram_code_ void irq_handler(void)
 {
 
+	modbus_uart_irq_proc();
 	app_timer_test_irq_proc();
 	irq_blt_sdk_handler ();
 

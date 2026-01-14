@@ -64,8 +64,8 @@
 #include "SocEnhance.h"
 #include "sif_send.h"
 #include "soc_kv_store.h"
-#include "modbus.h"
-#include "app_modbus_uart.h"
+#include "modbus_uart.h"
+#include "modbus_rtu.h"
 
 u8 tbl_advData[31];
 u8 tbl_advDataLen;
@@ -1782,9 +1782,8 @@ extern void AFE_Sleep(void);
 		}
 #endif
 	}
-	// main_loop_modbus();
-extern void app_modbus_uart_loop(void);
-	app_modbus_uart_loop();
+extern void main_loop_modbus(void);
+	main_loop_modbus();
 	// storage_poll();        // 闈為樆濉炶疆璇紙榛樿涓嶅仛闀挎摝闄わ級
 	// storage_test_step();   // 娴嬭瘯鍐欏叆锛堥獙璇� KV/LOG 绋冲畾鎬э級
 	{
@@ -1815,6 +1814,8 @@ extern void app_modbus_uart_loop(void);
 #endif
 		}
 	}
+extern void main_loop_modbus(void);
+	main_loop_modbus();
 	soc_kv_store_update_and_log_if_changed(SOC_Calculate_Element.u8SOC_Now, SOC_Calculate_Element.u8DSG_SOC_Int, SOC_Calculate_Element.u32Cycle_times);
 
 	// blt_pm_proc();
