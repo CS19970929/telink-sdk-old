@@ -110,40 +110,52 @@ void modbus_uart_rx_reset(void)
     uart_recbuff_init((u8*)&s_rx_pkt, sizeof(s_rx_pkt));
 }
 
-static u8 rsp_buf[268];
+static u8  rsp_buf[512];
+
+static _attribute_data_retention_ u32 mb_last_ok_tick = 0;
+static _attribute_data_retention_ u32 mb_bad_cnt = 0;
+
 void main_loop_modbus(void)
 {
-	u8 *req;
-	u32 req_len;
+    u8 *req = 0;
+    u32 req_len = 0;
 
-	if (modbus_uart_poll(&req, &req_len))
-	{
+    if (modbus_uart_poll(&req, &req_len))
+    {
+        u32 rsp_len = 0;
+        int ok = modbus_on_frame(req, req_len, rsp_buf, &rsp_len);
 
-		u32 rsp_len = 0;
-		if (modbus_on_frame(req, req_len, rsp_buf, &rsp_len))
-		{
-			if (rsp_len)
-			{
-				modbus_uart_send(rsp_buf, rsp_len);
-			}
-		}
+        // ✅关键：不管 ok 与否，必须清RX状态机/重新arm
+        modbus_uart_rx_reset();
 
-		// 重新 arm RX（强烈建议）
-		extern void modbus_uart_rx_reset(void);
-		modbus_uart_rx_reset();
-	}
-	// _attribute_data_retention_ static u32 update_bms_info_tick = 0;
-	// if (clock_time_exceed(update_bms_info_tick, 1000 * 500))
-	// {
-	// 	update_bms_info_tick = clock_time();
-	// 	// uart_dma_send((unsigned char *)&trans_buff);
-	// 	u8 send_buf[10] = {0};
-	// 	for (size_t i = 0; i < 10; i++)
-	// 	{
-	// 		send_buf[i] = 2 * i;
-	// 	}
-		
-	// 	modbus_uart_send(send_buf, sizeof(send_buf));
-	// }
+        if (ok && rsp_len)
+        {
+            modbus_uart_send(rsp_buf, rsp_len);
+            mb_last_ok_tick = clock_time();
+            mb_bad_cnt = 0;
+        }
+        else
+        {
+            mb_bad_cnt++;
+        }
+    }
+
+    // ✅温和自愈：长时间没成功回应，就做一次“软恢复”（不reset uart）
+    if (clock_time_exceed(mb_last_ok_tick, 1000 * 1000)) // 1秒都没成功回包
+    {
+        // 只做：清错误位 + 重新arm RX，不动 UART 配置
+        if (uart_is_parity_error()) uart_clear_parity_error();
+        modbus_uart_rx_reset();
+
+        mb_last_ok_tick = clock_time(); // 防止每次循环都触发
+    }
+
+    // ✅如果连续失败很多次，再考虑更强恢复（可选）
+    if (mb_bad_cnt > 50)
+    {
+        // 可选：再做一次稍强的恢复（仍不reset uart）
+        if (uart_is_parity_error()) uart_clear_parity_error();
+        modbus_uart_rx_reset();
+        mb_bad_cnt = 0;
+    }
 }
-

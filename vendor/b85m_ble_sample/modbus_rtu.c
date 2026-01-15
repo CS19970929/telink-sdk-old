@@ -4,6 +4,8 @@
 #include "tl_common.h"
 #include "drivers.h"
 #include "sci_upper.h"
+#include "param.h"
+#include "SocEnhance.h"
 
 #define MB_ADDR        0x01
 
@@ -17,11 +19,24 @@ static u16 read_reg(u16 reg) {
         // return g_stCellInfoReport.u16VCell[reg - 0xd000];
         return *(&g_stCellInfoReport.u16VCell[0] + (reg - 0xd000));
     }
+    if(reg >= 0x2100 && reg <= 0x2140)
+    {
+        return *(&g_tParam.protect.u16VcellOvp_First + (reg - 0x2100));
+    }
     return 0;
 }
 static void write_reg(u16 reg, u16 val) {
     (void)reg; (void)val;
     // TODO: 写寄存器
+    if(reg >= 0x2100 && reg <= 0x2140)
+    {
+        *(&g_tParam.protect.u16VcellOvp_First + (reg - 0x2100)) = val; 
+    }
+    // if(reg == 0x2318) 
+    if(reg == 0x1005)  SOC_Calculate_Element.u8SOC_Now = val;
+    if(reg == 0x2319)  SOC_Calculate_Element.u32Cycle_times = val;
+    // if(reg == 0x231A)  SOC_Calculate_Element.uj32Cycle_times = val;
+
 }
 
 u16 mb_crc16(const u8 *buf, u32 len)
