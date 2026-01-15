@@ -73,6 +73,8 @@ u8 tbl_advDataLen;
 u8 tbl_scanRsp[31];
 u8 tbl_scanRspLen;
 
+bool deepsleep_en = false;
+
 static void ble_build_adv_scanrsp(void)
 {
 	u8 i = 0;
@@ -109,39 +111,6 @@ static void ble_build_adv_scanrsp(void)
 
 	tbl_scanRspLen = i;
 }
-
-struct SYSTEM_ERROR
-{
-	UINT8 u8ErrFlag_Com_AFE1;
-	UINT8 u8ErrFlag_Com_AFE2;
-	UINT8 u8ErrFlag_Com_Can;
-	UINT8 u8ErrFlag_Com_EEPROM;
-
-	UINT8 u8ErrFlag_Com_SPI;
-	UINT8 u8ErrFlag_Com_Upper;
-	UINT8 u8ErrFlag_Com_Client;
-	UINT8 u8ErrFlag_Com_Screen;
-
-	UINT8 u8ErrFlag_Com_Wifi;
-	UINT8 u8ErrFlag_Com_BlueTooth;
-	UINT8 u8ErrFlag_Com_App;
-	UINT8 u8ErrFlag_CBC_CHG;
-
-	UINT8 u8ErrFlag_Store_EEPROM;
-	UINT8 u8ErrFlag_HSE;
-	UINT8 u8ErrFlag_LSE;
-	UINT8 u8ErrFlag_Vdelta_OVER;
-
-	UINT8 u8ErrFlag_Balanced;
-	UINT8 u8ErrFlag_ADC;
-	UINT8 u8ErrFlag_Heat;
-	UINT8 u8ErrFlag_Cool;
-
-	UINT8 u8ErrFlag_CBC_DSG;
-	UINT8 u8ErrFlag_SOC_Cail;
-	UINT8 u8ErrFlag_TempBreak;
-	UINT8 u8ErrFlag_DsgShort;
-};
 
 volatile struct SYSTEM_ERROR System_ErrFlag;
 
@@ -831,8 +800,9 @@ _attribute_ram_code_ void blt_pm_proc(void)
 				}
 			}
 		}
-		if (g_stCellInfoReport.u16VCellMin <= 3000)
+		if ((g_stCellInfoReport.u16VCellMin <= 3000 && !g_stCellInfoReport.u16Ichg) || deepsleep_en)
 		{
+			if(deepsleep_en) sleep_vlow_cnt = 60;
 			if (++sleep_vlow_cnt >= (60))
 			{
 				cpu_set_gpio_wakeup(SW_PIN, Level_Low, 0);
@@ -1108,6 +1078,7 @@ void user_init_normal(void)
 		gpio_set_input_en(AFE1_PRO_EN_PIN, 0);
 		gpio_set_output_en(AFE1_PRO_EN_PIN, 1);
 
+		WaitMs(100);
 		AFE_Reset();
 		AFE_IsReady();
 		SH367309_UpdataAfeConfig();
@@ -1164,8 +1135,6 @@ void user_init_normal(void)
 			gpio_write(OWC_TX_PIN, 0);
 		}
 
-		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-
 		adc_app_ch_cfg_t cfg[ADC_APP_CH_MAX] = {
 			{ADC_NTC_PIN, 1},  // CH0: 电压分压
 			{ADC_VBUS_PIN, 1}, // CH1: NTC1
@@ -1182,12 +1151,43 @@ void user_init_normal(void)
 		// d.soc = 100;
 		soc_param_lib_init(&d);
 
-extern void app_modbus_uart_init(uint32_t baud);
+		extern void app_modbus_uart_init(uint32_t baud);
 		// app_modbus_uart_init(9600);
 		modbus_uart_init();
 	}
 }
 
+void open_chg_close_dsg(void)
+{
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 寮�鍚疌ADC
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 0; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	gpio_write(MCC_C_PIN, 1);
+}
+void open_dsg_close_chg(void)
+{
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 寮�鍚疌ADC
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	gpio_write(MCC_C_PIN, 0);
+}
+void enter_fac_mode(bool on)
+{
+	if (on)
+	{
+		SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 寮�鍚疌ADC
+		SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+		SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
+		MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+		gpio_write(MCC_C_PIN, 1);
+	}
+	else
+	{
+		open_dsg_close_chg();
+	}
+}
 void charger_detect_and_keyLogi_200ms(void)
 {
 	static u8 state = 0;
@@ -1200,12 +1200,7 @@ void charger_detect_and_keyLogi_200ms(void)
 			putchar(0x55);
 			state = 1;
 			// gpio_write(AFE_CTL_PIN, 0);
-
-			SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 寮�鍚疌ADC
-			SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
-			SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 0; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
-			MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
-			gpio_write(MCC_C_PIN, 1);
+			open_chg_close_dsg();
 		}
 		else
 		{
@@ -1217,12 +1212,7 @@ void charger_detect_and_keyLogi_200ms(void)
 		{
 			putchar(0xaa);
 			state = 0;
-			SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 寮�鍚疌ADC
-			SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
-			SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 鍏呯數MOS鐢盇FE纭欢鎺у埗
-			MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
-			gpio_write(MCC_C_PIN, 0);
-
+			open_dsg_close_chg();
 			// gpio_write(AFE_CTL_PIN, 1);
 		}
 		else
@@ -1772,7 +1762,6 @@ void main_loop(void)
 		printf("temp1 %d temp2 %d", temp1, temp2);
 		charger_detect_and_keyLogi_200ms();
 
-
 #if 0
 		if(sleep_en)
 		{
@@ -1782,8 +1771,6 @@ extern void AFE_Sleep(void);
 		}
 #endif
 	}
-extern void main_loop_modbus(void);
-	main_loop_modbus();
 	// storage_poll();        // 闈為樆濉炶疆璇紙榛樿涓嶅仛闀挎摝闄わ級
 	// storage_test_step();   // 娴嬭瘯鍐欏叆锛堥獙璇� KV/LOG 绋冲畾鎬э級
 	{
@@ -1814,11 +1801,11 @@ extern void main_loop_modbus(void);
 #endif
 		}
 	}
-extern void main_loop_modbus(void);
+	extern void main_loop_modbus(void);
 	main_loop_modbus();
 	soc_kv_store_update_and_log_if_changed(SOC_Calculate_Element.u8SOC_Now, SOC_Calculate_Element.u8DSG_SOC_Int, SOC_Calculate_Element.u32Cycle_times);
 
-	// blt_pm_proc();
+	blt_pm_proc();
 ////////////////////////////////////// PM Process /////////////////////////////////
 #if (UI_KEYBOARD_ENABLE)
 	blt_pm_proc();

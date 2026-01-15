@@ -39,42 +39,42 @@ sizedummy \
 
 
 # All Target
-all: telink-sdk-old.elf secondary-outputs
+all: b85m_ble_single_connection_sdk.elf secondary-outputs
 
 # Tool invocations
-telink-sdk-old.elf: $(OBJS) $(USER_OBJS)
+b85m_ble_single_connection_sdk.elf: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: TC32 C Linker'
-	tc32-elf-ld --gc-sections -L"D:\telink work\telink-sdk-old\proj_lib" -T ../boot.link -o"telink-sdk-old.elf" $(OBJS) $(USER_OBJS) $(LIBS)
+	tc32-elf-ld --gc-sections -L"D:\telink\TLSR-8258\TLSR-8258\B85M_SINGLE_BLE_SDK(1)\b85_ble_sdk\proj_lib" -T ../boot.link -o"b85m_ble_single_connection_sdk.elf" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 	$(MAKE) --no-print-directory post-build
 
-825x_internal_test.lst: telink-sdk-old.elf
+825x_internal_test.lst: b85m_ble_single_connection_sdk.elf
 	@echo 'Invoking: TC32 Create Extended Listing'
-	tc32-elf-objdump -x -D -l -S telink-sdk-old.elf  >"825x_internal_test.lst"
+	tc32-elf-objdump -x -D -l -S b85m_ble_single_connection_sdk.elf  >"825x_internal_test.lst"
 	@echo 'Finished building: $@'
 	@echo ' '
 
-: telink-sdk-old.elf
+: b85m_ble_single_connection_sdk.elf
 	@echo 'Create Flash image (binary format)'
-	tc32-elf-objcopy telink-sdk-old.elf
+	tc32-elf-objcopy b85m_ble_single_connection_sdk.elf
 	@echo 'Finished building: $@'
 	@echo ' '
 
-sizedummy: telink-sdk-old.elf
+sizedummy: b85m_ble_single_connection_sdk.elf
 	@echo 'Invoking: Print Size'
-	tc32-elf-size -t telink-sdk-old.elf
+	tc32-elf-size -t b85m_ble_single_connection_sdk.elf
 	@echo 'Finished building: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) $(FLASH_IMAGE)$(ELFS)$(OBJS)$(LST)$(SIZEDUMMY) telink-sdk-old.elf
+	-$(RM) $(FLASH_IMAGE)$(ELFS)$(OBJS)$(LST)$(SIZEDUMMY) b85m_ble_single_connection_sdk.elf
 	-@echo ' '
 
 post-build:
-	-"D:\telink work\telink-sdk-old/tl_check_fw.sh"   825x_driver_test   telink-sdk-old
+	-"D:\telink\TLSR-8258\TLSR-8258\B85M_SINGLE_BLE_SDK(1)\b85_ble_sdk/tl_check_fw.sh"   825x_driver_test   b85m_ble_single_connection_sdk
 	-@echo ' '
 
 secondary-outputs: $(LST) $(FLASH_IMAGE) $(SIZEDUMMY)

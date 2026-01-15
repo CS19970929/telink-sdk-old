@@ -6,6 +6,8 @@
 #include "sci_upper.h"
 #include "param.h"
 #include "SocEnhance.h"
+#include "sh367309_datadeal.h"
+#include "app.h"
 
 #define MB_ADDR        0x01
 
@@ -13,6 +15,11 @@ extern struct stCell_Info g_stCellInfoReport;
 static u16 read_reg(u16 reg) {
     // TODO: 这里换成你的寄存器表
     // 先给个可见的动态值
+    UINT16 u16SciTemp;
+	UINT16 i = 0, j;
+	INT8 k;
+	UINT8 a[4];
+    u16 val;
 
     if(reg >= 0xd000 && reg <= 0xd03e)
     {
@@ -23,8 +30,99 @@ static u16 read_reg(u16 reg) {
     {
         return *(&g_tParam.protect.u16VcellOvp_First + (reg - 0x2100));
     }
+    if(reg >= 0xD100 && reg <= 0xD114)
+    {
+        for (j = 0; j < 4; j++)
+	    {
+		k = FaultPoint_First2 - 1 - j;
+		if (k < 0)
+		{
+			k = Record_len + k;
+		}
+		a[j] = k;
+	    }
+        for (j = 0; j < 4; j++)
+	    {
+		k = FaultPoint_Second2 - 1 - j;
+		if (k < 0)
+		{
+			k = Record_len + k;
+		}
+		a[j] = k;
+	    }
+        for (j = 0; j < 4; j++)
+	{
+		k = FaultPoint_Third2 - 1 - j;
+		if (k < 0)
+		{
+			k = Record_len + k;
+		}
+		a[j] = k;
+	}
+
+        switch (reg)
+        {
+        case 0xD100:
+        case 0xD101:
+        case 0xD102:
+            return 0;
+            break;
+        case 0xD103:
+	        u16SciTemp = (Fault_record_First2[a[0]] << 8) | Fault_record_First2[a[1]];
+	        val = u16SciTemp;
+            return val;
+            break;
+        case 0xD104:
+	        u16SciTemp = (Fault_record_First2[a[2]] << 8) | Fault_record_First2[a[3]];
+	        val = u16SciTemp;
+            return val;
+            break;
+        case 0xD105:
+	        u16SciTemp = (Fault_record_Second2[a[0]] << 8) | Fault_record_Second2[a[1]];
+	        val = u16SciTemp;
+            return val;
+            break;
+        case 0xD106:
+	        u16SciTemp = (Fault_record_Second2[a[2]] << 8) | Fault_record_Second2[a[3]];
+	        val = u16SciTemp;
+            return val;
+            break;
+        case 0xD107:
+	        u16SciTemp = (Fault_record_Third2[a[0]] << 8) | Fault_record_Third2[a[1]];
+	        val = u16SciTemp;
+            return val;
+            break;
+        case 0xD108:
+	        u16SciTemp = (Fault_record_Third2[a[2]] << 8) | Fault_record_Third2[a[3]];
+	        val = u16SciTemp;
+            return val;
+            break;
+        default:
+            break;
+        }
+        // System_ErrFlag.u8ErrFlag_Com_AFE1 = 1;
+        // System_ErrFlag.u8ErrFlag_Com_AFE2 = 8;
+        // System_ErrFlag.u8ErrFlag_Store_EEPROM = 66;
+        // System_ErrFlag.u8ErrFlag_CBC_DSG = 88;
+        if(reg >= 0xD109 && reg <= 0xD114)
+        {
+            return ((*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * (reg - 0xd109))) << 8) | (*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * (reg - 0xd109) + 1));
+        }
+    }
+    SystemStatus.bits.b1StartUpBMS = 1;
+    SystemStatus.bits.b1Status_ToSleep = 1;
+    SystemStatus.bits.b1Status_AFE1 = 1;
+    if(reg >= 0xD115 && reg <= 0xD118)
+    {
+        if(reg == 0xd115) return ((UINT16)(SystemStatus.all & 0x0000FFFF));
+        if(reg == 0xd116) return ((UINT16)(SystemStatus.all >> 16));
+        // if(reg == 0xd117) return ((UINT16)(System_OnOFF_Func.all & 0x0000FFFF));
+        // if(reg == 0xd118) return ((UINT16)(System_OnOFF_Func.all >> 16));
+    }
     return 0;
 }
+extern void enter_fac_mode(bool on);
+extern bool deepsleep_en;
 static void write_reg(u16 reg, u16 val) {
     (void)reg; (void)val;
     // TODO: 写寄存器
@@ -33,9 +131,19 @@ static void write_reg(u16 reg, u16 val) {
         *(&g_tParam.protect.u16VcellOvp_First + (reg - 0x2100)) = val; 
     }
     // if(reg == 0x2318) 
-    if(reg == 0x1005)  SOC_Calculate_Element.u8SOC_Now = val;
+    if(reg == 0x1005)  set_soc_param(val, 1, 1);
+    if(reg == 0x1102)
+    {
+        if(val == 0x03) enter_fac_mode(true);
+        if(val == 0x0A) deepsleep_en = true;
+    }
+    if(reg == 0x1103)
+    {
+        if(val == 0x03) enter_fac_mode(false);
+    }
+    // if(reg == 0x1103)  SOC_Calculate_Element.u8SOC_Now = val;
     if(reg == 0x2319)  SOC_Calculate_Element.u32Cycle_times = val;
-    // if(reg == 0x231A)  SOC_Calculate_Element.uj32Cycle_times = val;
+    
 
 }
 

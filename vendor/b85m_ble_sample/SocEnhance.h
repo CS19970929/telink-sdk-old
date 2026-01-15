@@ -40,6 +40,7 @@ void bmsParam_save(void);
 int8_t get_soc_from_openVol_new(uint16_t VCell);
 void set_soc_param(uint8_t _soc_val, uint16_t _cap_factory, uint8_t disp_sync_updatae);
 void soc_param_lib_init(soc_kv_data_t* _soc);
+void set_soc_param(uint8_t _soc_val, uint16_t _cap_factory, uint8_t disp_sync_updatae);
 
 #endif	/* SOCENHANCE_H */
 
