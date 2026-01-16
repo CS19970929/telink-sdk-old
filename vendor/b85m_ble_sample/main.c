@@ -98,12 +98,15 @@ _attribute_ram_code_ int main (void)    //must run in ramcode
 
 	blc_app_loadCustomizedParameters();  //load customized freq_offset cap value
 
+	#if 0
 	if( deepRetWakeUp ){
 		user_init_deepRetn ();
 	}
 	else{
 		user_init_normal ();
 	}
+	#endif
+	user_init_normal ();
 
     irq_enable();
 	while (1) {

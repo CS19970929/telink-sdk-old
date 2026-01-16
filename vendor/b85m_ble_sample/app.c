@@ -442,29 +442,6 @@ _attribute_data_retention_ my_fifo_t blt_txfifo = {
 	blt_txfifo_b,
 };
 
-/**
- * @brief	Adv Packet data
- */
-
-// const u8	tbl_advData[] = {
-// 	 0x05, 0x09, 'h', 'a', 'n', 's', 't', 'a', 'r',
-// 	 0x02, 0x01, 0x05, 							// BLE limited discoverable mode and BR/EDR not supported
-// 	 0x03, 0x19, 0x80, 0x01, 					// 384, Generic Remote Control, Generic category
-// 	 0x05, 0x02, 0x12, 0x18, 0x0F, 0x18,		// incomplete list of service class UUIDs (0x1812, 0x180F)
-// };
-// const u8	tbl_advData[] = {
-// 	 0x05, 0x09, 'V', 'H', 'I', 'D',
-// 	 0x02, 0x01, 0x05, 							// BLE limited discoverable mode and BR/EDR not supported
-// 	 0x03, 0x19, 0x80, 0x01, 					// 384, Generic Remote Control, Generic category
-// 	 0x05, 0x02, 0x12, 0x18, 0x0F, 0x18,		// incomplete list of service class UUIDs (0x1812, 0x180F)
-// };
-// const u8	tbl_advData[] = {
-// 	 0x05, 0x09, 'S', 'T', 'A', 'R',
-// 	 0x02, 0x01, 0x05, 							// BLE limited discoverable mode and BR/EDR not supported
-// 	 0x03, 0x19, 0x80, 0x01, 					// 384, Generic Remote Control, Generic category
-// 	 0x05, 0x02, 0x12, 0x18, 0x0F, 0x18,		// incomplete list of service class UUIDs (0x1812, 0x180F)
-// };
-
 // adc_mv: ADC 引脚电压(mV)
 int16_t ntc_adc_to_temp_01c(uint32_t adc_mv)
 {
@@ -480,17 +457,6 @@ _attribute_data_retention_ u32 advertise_begin_tick;
 _attribute_data_retention_ u32 interval_update_tick;
 _attribute_data_retention_ u8 sendTerminate_before_enterDeep = 0;
 _attribute_data_retention_ u32 latest_user_event_tick;
-
-#if (UI_KEYBOARD_ENABLE)
-
-_attribute_data_retention_ int key_not_released;
-_attribute_data_retention_ u8 key_type;
-_attribute_data_retention_ static u32 keyScanTick = 0;
-
-extern u32 scan_pin_need;
-
-#define CONSUMER_KEY 1
-#define KEYBOARD_KEY 2
 
 _attribute_data_retention_ u8 ota_is_working = 0;
 void app_enter_ota_mode(void)
@@ -533,95 +499,6 @@ void app_timer_test_init(void)
 
 	irq_enable();
 }
-
-/**
- * @brief		this function is used to process keyboard matrix status change.
- * @param[in]	none
- * @return      none
- */
-void key_change_proc(void)
-{
-	latest_user_event_tick = clock_time(); // record latest key change time
-
-	u8 key0 = kb_event.keycode[0];
-	u8 key_buf[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-
-	key_not_released = 1;
-	if (kb_event.cnt == 2) // two key press, do  not process
-	{
-	}
-	else if (kb_event.cnt == 1)
-	{
-		if (key0 >= CR_VOL_UP) // volume up/down
-		{
-			key_type = CONSUMER_KEY;
-			u16 consumer_key;
-			if (key0 == CR_VOL_UP)
-			{ // volume up
-				consumer_key = MKEY_VOL_UP;
-			}
-			else if (key0 == CR_VOL_DN)
-			{ // volume down
-				consumer_key = MKEY_VOL_DN;
-			}
-			blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, HID_CONSUME_REPORT_INPUT_DP_H, (u8 *)&consumer_key, 2);
-		}
-		else
-		{
-			key_type = KEYBOARD_KEY;
-			key_buf[2] = key0;
-			blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, HID_NORMAL_KB_REPORT_INPUT_DP_H, key_buf, 8);
-		}
-	}
-	else // kb_event.cnt == 0,  key release
-	{
-		key_not_released = 0;
-		if (key_type == CONSUMER_KEY)
-		{
-			u16 consumer_key = 0;
-			blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, HID_CONSUME_REPORT_INPUT_DP_H, (u8 *)&consumer_key, 2);
-		}
-		else if (key_type == KEYBOARD_KEY)
-		{
-			key_buf[2] = 0;
-			blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, HID_NORMAL_KB_REPORT_INPUT_DP_H, key_buf, 8); // release
-		}
-	}
-}
-
-/**
- * @brief      this function is used to detect if key pressed or released.
- * @param[in]  e - LinkLayer Event type
- * @param[in]  p - data pointer of event
- * @param[in]  n - data length of event
- * @return     none
- */
-_attribute_ram_code_ void proc_keyboard(u8 e, u8 *p, int n)
-{
-	if (clock_time_exceed(keyScanTick, 8000))
-	{
-		keyScanTick = clock_time();
-	}
-	else
-	{
-		return;
-	}
-
-	kb_event.keycode[0] = 0;
-	int det_key = kb_scan_key(0, 1);
-
-	if (det_key)
-	{
-		key_change_proc();
-	}
-}
-
-#elif (UI_BUTTON_ENABLE)
-
-_attribute_data_retention_ static int button_detect_en = 0;
-_attribute_data_retention_ static u32 button_detect_tick = 0;
-
-#endif
 
 /**
  * @brief      callback function of LinkLayer Event "BLT_EV_FLAG_SUSPEND_ENTER"
@@ -681,11 +558,6 @@ void task_terminate(u8 e, u8 *p, int n) //*p is terminate reason
 	{
 	}
 
-#if (UI_LED_ENABLE)
-	gpio_write(GPIO_LED_RED, !LED_ON_LEVAL);
-	gpio_write(GPIO_LED_BLUE, !LED_ON_LEVAL);
-#endif
-
 #if (BLE_APP_PM_ENABLE)
 	// user has push terminate pkt to ble TX buffer before deepsleep
 	if (sendTerminate_before_enterDeep == 1)
@@ -734,11 +606,6 @@ void task_connect(u8 e, u8 *p, int n)
 	device_in_connection_state = 1; //
 
 	interval_update_tick = clock_time() | 1; // none zero
-
-#if (UI_LED_ENABLE)
-	gpio_write(GPIO_LED_RED, LED_ON_LEVAL);
-	gpio_write(GPIO_LED_BLUE, !LED_ON_LEVAL);
-#endif
 }
 
 int timer0_irq_cnt = 0;
@@ -750,11 +617,9 @@ _attribute_ram_code_ void app_timer_test_irq_proc(void)
 		sif_send_data_handle();
 		reg_tmr_sta = FLD_TMR_STA_TMR0; // clear irq status
 		timer0_irq_cnt++;
-		// gpio_toggle(GPIO_PC3);
 		if (timer0_irq_cnt >= 200)
 		{
 			timer0_irq_cnt = 0;
-			// gpio_toggle(GPIO_PC3);
 		}
 		// DBG_CHN0_TOGGLE;
 	}
@@ -792,9 +657,6 @@ _attribute_ram_code_ void blt_pm_proc(void)
 				if (++sleep_cnt >= 5)
 				{
 					sleep_cnt = 0;
-					// printf("0x5v %d\n", gpio_read(CHG_IN_PIN));
-					// printf("0xkey %d\n", gpio_read(SW_PIN));
-					// gpio_write(AFE_CTL_PIN, 0);
 					AFE_Sleep();
 					cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0); // deepsleep
 				}
@@ -816,12 +678,8 @@ _attribute_ram_code_ void blt_pm_proc(void)
 #if (BLE_APP_PM_ENABLE)
 	if (!ota_is_working)
 	{
-#if (PM_DEEPSLEEP_RETENTION_ENABLE)
-		bls_pm_setSuspendMask(SUSPEND_ADV | DEEPSLEEP_RETENTION_ADV | SUSPEND_CONN | DEEPSLEEP_RETENTION_CONN);
-#else
 		bls_pm_setSuspendMask(SUSPEND_ADV | SUSPEND_CONN);
 		// bls_pm_setSuspendMask (SUSPEND_ADV);
-#endif
 	}
 
 	// do not care about keyScan/button_detect power here, if you care about this, please refer to "8258_ble_remote" demo
@@ -830,84 +688,26 @@ _attribute_ram_code_ void blt_pm_proc(void)
 	//  		bls_pm_setSuspendMask (SUSPEND_DISABLE);
 	//  	}
 	//  #endif
-
-#if 0
-#if (!TEST_CONN_CURRENT_ENABLE) // test connection power, should disable deepSleep
-			if(sendTerminate_before_enterDeep == 2){  //Terminate OK
-				analog_write(USED_DEEP_ANA_REG, analog_read(USED_DEEP_ANA_REG) | CONN_DEEP_FLG);
-				cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0);  //deepSleep
-			}
-
-
-			if(  !blc_ll_isControllerEventPending() ){  //no controller event pending
-				//adv 60s, deepsleep
-				if( blc_ll_getCurrentState() == BLS_LINK_STATE_ADV && !sendTerminate_before_enterDeep && \
-					clock_time_exceed(advertise_begin_tick , ADV_IDLE_ENTER_DEEP_TIME * 1000000))
-				{
-					cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0);  //deepsleep
-				}
-				//conn 60s no event(key/voice/led), enter deepsleep
-				else if( device_in_connection_state && \
-						clock_time_exceed(latest_user_event_tick, CONN_IDLE_ENTER_DEEP_TIME * 1000000) )
-				{
-
-					bls_ll_terminateConnection(HCI_ERR_REMOTE_USER_TERM_CONN); //push terminate cmd into ble TX buffer
-					bls_ll_setAdvEnable(0);   //disable adv
-					sendTerminate_before_enterDeep = 1;
-				}
-			}
-#endif							// end of !TEST_CONN_CURRENT_ENABLE
-#endif							// end of BLE_APP_PM_ENABLE
 #endif							// end of BLE_APP_PM_ENABLE
 }
 
 void i2c_master_test_init(void)
 {
-
-	// I2C pin set
-#if (MCU_CORE_TYPE == MCU_CORE_827x)
-	i2c_gpio_set(I2C_GPIO_SDA_C0, I2C_GPIO_SCL_C1); // SDA/CK : C0/C1
-#elif (MCU_CORE_TYPE == MCU_CORE_825x)
 	i2c_gpio_set(I2C_GPIO_GROUP_C0C1); // SDA/CK : C0/C1
-#endif
-
-	// slave device id 0x5C(write) 0x5D(read)
-	// i2c clock 200K, only master need set i2c clock
-	//  i2c_master_init(0x34, (unsigned char)(CLOCK_SYS_CLOCK_HZ/(4*200000)) );
-	//  i2c_master_init(0x34, (unsigned char)(CLOCK_SYS_CLOCK_HZ/(4*400000)) );
 	i2c_master_init(AFE_ID, (unsigned char)(CLOCK_SYS_CLOCK_HZ / (4 * 100000)));
 }
 
-volatile unsigned char i2c_master_rx_buff[0x71 - 0x40 + 1 + 1] = {0};
-
 float RSENSE = 0.001;
-// float Sh_GetCadcCurrent(u16 *current)
 void i2c_master_mainloop(void)
 {
 #define SLAVE_DMA_MODE_OTHER_DEV_WRITE (0x46)
 #define SLAVE_DMA_MODE_OTHER_DEV_READ (0x40)
 	u8 addr = SLAVE_DMA_MODE_OTHER_DEV_READ;
 	u8 len = (0x71 - 0x40 + 1); // 鎵嬪唽璇达細闀垮害涓嶅寘鍚獵RC
-	// i2c_master_tx_buff[0] += 1;
-	// 825x slave dma mode, sram address(0x40000~0x4FFFF) length should be 3 byte
-	// i2c_write_series(SLAVE_DMA_MODE_OTHER_DEV_WRITE, 1, (unsigned char *)i2c_master_tx_buff, DBG_DATA_LEN);
-	// WaitMs(100);   //1 S
-	// i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len + 1);
-	// i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)i2c_master_rx_buff, len);
-	i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)&ram_reg_309, len);
-	// array_printf(i2c_master_rx_buff, len);
-	// Sh_GetCadcCurrent();
-	App_AFEGet();
-	// printf("current %d,%d", g_stCellInfoReport.u16Ichg, g_stCellInfoReport.u16IDischg);
 
-#if 0
-		/*********** copy the data read by i2c master from slave for debug  ****************/
-		memcpy( (unsigned char *)(master_rx_buff_debug + master_rx_index*DBG_DATA_LEN), (unsigned char *)i2c_master_rx_buff, DBG_DATA_LEN);
-		master_rx_index ++;
-		if(master_rx_index>=DBG_DATA_NUM){
-			master_rx_index = 0;
-		}
-#endif
+	i2c_read_series(((u16)addr << 8) | len, 2, (unsigned char *)&ram_reg_309, len);
+
+	App_AFEGet();
 }
 
 /**
@@ -1017,45 +817,9 @@ void user_init_normal(void)
 	bls_app_registerEventCallback(BLT_EV_FLAG_TERMINATE, &task_terminate);
 
 	///////////////////// Power Management initialization///////////////////
-#if (BLE_APP_PM_ENABLE)
 	blc_ll_initPowerManagement_module();
-
-#if (PM_DEEPSLEEP_RETENTION_ENABLE)
-	blc_pm_setDeepsleepRetentionType(DEEPSLEEP_MODE_RET_SRAM_LOW16K); // default use 16k deep retention
-	bls_pm_setSuspendMask(SUSPEND_ADV | DEEPSLEEP_RETENTION_ADV | SUSPEND_CONN | DEEPSLEEP_RETENTION_CONN);
-	blc_pm_setDeepsleepRetentionThreshold(95, 95);
-
-#if (MCU_CORE_TYPE == MCU_CORE_825x)
-	blc_pm_setDeepsleepRetentionEarlyWakeupTiming(TEST_CONN_CURRENT_ENABLE ? 240 : 260);
-#elif ((MCU_CORE_TYPE == MCU_CORE_827x))
-	blc_pm_setDeepsleepRetentionEarlyWakeupTiming(TEST_CONN_CURRENT_ENABLE ? 340 : 350);
-#else
-#endif
-#else
 	bls_pm_setSuspendMask(SUSPEND_ADV | SUSPEND_CONN);
-#endif
-
 	bls_app_registerEventCallback(BLT_EV_FLAG_SUSPEND_ENTER, &ble_remote_set_sleep_wakeup);
-#else
-	bls_pm_setSuspendMask(SUSPEND_DISABLE);
-#endif
-
-	// #if (UI_KEYBOARD_ENABLE)
-	// 	/////////// keyboard gpio wakeup init ////////
-	// 	u32 pin[] = KB_DRIVE_PINS;
-	// 	for (int i = 0; i < (sizeof(pin) / sizeof(*pin)); i++)
-	// 	{
-	// 		cpu_set_gpio_wakeup(pin[i], Level_High, 1); // drive pin pad high wakeup deepsleep
-	// 	}
-
-	// 	bls_app_registerEventCallback(BLT_EV_FLAG_GPIO_EARLY_WAKEUP, &proc_keyboard);
-	// #elif (UI_BUTTON_ENABLE)
-
-	// 	cpu_set_gpio_wakeup(SW1_GPIO, Level_Low, 1); // button pin pad low wakeUp suspend/deepSleep
-	// 	cpu_set_gpio_wakeup(SW2_GPIO, Level_Low, 1); // button pin pad low wakeUp suspend/deepSleep
-
-	// 	bls_app_registerEventCallback(BLT_EV_FLAG_GPIO_EARLY_WAKEUP, &proc_button);
-	// #endif
 
 	advertise_begin_tick = clock_time();
 
@@ -1105,11 +869,6 @@ void user_init_normal(void)
 			gpio_set_output_en(MCC_C_PIN, 1);
 			gpio_write(MCC_C_PIN, 0);
 
-			gpio_set_func(MCC_C_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
-			gpio_set_input_en(MCC_C_PIN, 0);
-			gpio_set_output_en(MCC_C_PIN, 1);
-			gpio_write(MCC_C_PIN, 0);
-
 			gpio_set_func(CHG_IN_PIN, AS_GPIO); // PA4 榛樿涓� GPIO 鍔熻兘锛屽彲浠ヤ笉璁剧疆
 			gpio_setup_up_down_resistor(CHG_IN_PIN, PM_PIN_PULLUP_10K);
 			gpio_set_input_en(CHG_IN_PIN, 1);
@@ -1151,8 +910,6 @@ void user_init_normal(void)
 		// d.soc = 100;
 		soc_param_lib_init(&d);
 
-		extern void app_modbus_uart_init(uint32_t baud);
-		// app_modbus_uart_init(9600);
 		modbus_uart_init();
 	}
 }
@@ -1262,10 +1019,7 @@ _attribute_ram_code_ void user_init_deepRetn(void)
 #endif
 }
 
-// _attribute_data_retention_ u8 notify_data_test[20] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
-// _attribute_data_retention_ u8 notify_data_test[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,0x08,0x09,0x0a,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30};
 bool rev_master = false;
-
 u16 Sci_CRC16RTU(u8 *pszBuf, u8 unLength)
 {
 	u16 CRCC = 0XFFFF;
@@ -1310,14 +1064,6 @@ u8 test_buf[MAX_TEST_DATA_LEN] = {
 	0x0C, 0x6D, 0x0C, 0x5C, 0x00, 0x01, 0x00, 0x04,
 	0x00, 0x11, 0x04, 0xF6,
 	0xAD, 0x2E};
-
-void generate_test_data(int len)
-{
-	for (int i = 0; i < len; i++)
-	{
-		test_buf[i] = i & 0xFF; // 鏈夎寰嬬殑鏁版嵁锛屾柟渚� checksum
-	}
-}
 
 #define TELINK_NOTIFY_PAYLOAD 20 // MTU=23 鏃� payload = 20
 
@@ -1379,74 +1125,6 @@ int simulate_soc(void)
 	++soc;
 	return soc;
 }
-const u16 protect_para[65] = {
-	3400,
-	3500,
-	3600,
-	3500,
-	100,
-	3000,
-	3000,
-	3000,
-	3100,
-	100,
-	12000,
-	12000,
-	12000,
-	11000,
-	100,
-	9000,
-	9000,
-	9000,
-	10000,
-	100,
-	800,
-	800,
-	800,
-	100,
-	10,
-	800,
-	800,
-	800,
-	100,
-	10,
-	1000,
-	1000,
-	1000,
-	960,
-	100,
-	400,
-	400,
-	400,
-	450,
-	200,
-	1000,
-	1000,
-	1000,
-	960,
-	100,
-	400,
-	400,
-	400,
-	450,
-	500,
-	1000,
-	1000,
-	1000,
-	960,
-	100,
-	100,
-	200,
-	300,
-	100,
-	100,
-	20,
-	10,
-	5,
-	6,
-	100,
-};
-
 void notify_other_status(void)
 {
 	// printf("notify_other_status");
@@ -1610,8 +1288,6 @@ void notify_protect_prarm(void)
 	size_t i;
 	for (i = 0; i < 65; i++)
 	{
-		// test_buf[3 + i * 2] =  protect_para[i] >> 8;
-		// test_buf[4 + i * 2] =  protect_para[i] & 0xff;
 		test_buf[3 + i * 2] = *p >> 8;
 		test_buf[4 + i * 2] = *p & 0xff;
 		p++;
@@ -1710,26 +1386,17 @@ void notify_votage(void)
  * @param[in]  none.
  * @return     none.
  */
+/* todo
+1.adc  三路采样
+2. 低功耗测试
+3.afe通讯失败测试
+4
+*/
 void main_loop(void)
 {
 	////////////////////////////////////// BLE entry /////////////////////////////////
 	blt_sdk_main_loop();
 
-////////////////////////////////////// UI entry /////////////////////////////////
-#if (UI_KEYBOARD_ENABLE)
-	proc_keyboard(0, 0, 0);
-#elif (UI_BUTTON_ENABLE)
-	// process button 1 second later after power on, to avoid power unstable
-	if (!button_detect_en && clock_time_exceed(0, 1000000))
-	{
-		button_detect_en = 1;
-	}
-	if (button_detect_en && clock_time_exceed(button_detect_tick, 5000))
-	{
-		button_detect_tick = clock_time();
-		proc_button(0, 0, 0); // button triggers pair & unpair  and OTA
-	}
-#endif
 	_attribute_data_retention_ static u32 update_bms_info_tick = 0;
 	if (clock_time_exceed(update_bms_info_tick, 1000 * 200))
 	{
@@ -1789,27 +1456,14 @@ extern void AFE_Sleep(void);
 				notify_other_status();
 			else if (addr == 0xd100)
 				notify_protect_status();
-#if 0
-			u8 remain = sizeof(notify_data_test);
-			// u8 remain = 30;
-			u8 *p = notify_data_test;
-			rev_master = false;
-			ble_sts_t ret;
-			interval_update_tick = clock_time();
-			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_SERVER_TO_CLIENT_DP_H, notify_data_test, 8);
-			// ret = blc_gatt_pushHandleValueNotify(BLS_CONN_HANDLE, SPP_CLIENT_TO_SERVER_DP_H, notify_data_test, sizeof(notify_data_test));
-#endif
 		}
 	}
 	extern void main_loop_modbus(void);
 	main_loop_modbus();
 	soc_kv_store_update_and_log_if_changed(SOC_Calculate_Element.u8SOC_Now, SOC_Calculate_Element.u8DSG_SOC_Int, SOC_Calculate_Element.u32Cycle_times);
 
-	blt_pm_proc();
 ////////////////////////////////////// PM Process /////////////////////////////////
-#if (UI_KEYBOARD_ENABLE)
 	blt_pm_proc();
-#elif (UI_BUTTON_ENABLE)
 	if (button_not_released)
 	{
 		bls_pm_setSuspendMask(SUSPEND_DISABLE);
@@ -1818,5 +1472,4 @@ extern void AFE_Sleep(void);
 	{
 		bls_pm_setSuspendMask(SUSPEND_ADV | SUSPEND_CONN);
 	}
-#endif
 }

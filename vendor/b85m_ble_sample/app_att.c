@@ -440,25 +440,6 @@ int module_onReceiveData(void *para)
 		MODS_Poll(data, len);
 
 		rev_cnt++;
-		// printf("rev cnt %d", rev_cnt);
-		MODS_Poll(data, len);
-		// array_printf(data, len);
-		// if(addr == 0xd000)
-		// 	notify_votage();
-		// else if (addr == 0x2100)
-		// 	notify_protect_prarm();
-
-		// update_my_batVal(addr);
-		
-		// spp_event_t *pEvt =  (spp_event_t *)p;
-		// pEvt->token = 0xFF;
-		// pEvt->paramLen = p->l2capLen + 2;   //l2cap_len + 2 byte (eventId)
-		// pEvt->eventId = 0x07a0;  //data received event
-		// memcpy(pEvt->param, &p->opcode, len + 3);
-
-		// spp_send_data(HCI_FLAG_EVENT_TLK_MODULE, pEvt);
-		// printf("Receive data, handle = %x\r\n", p->handle1 | (p->handle1<<8));
-		// array_printf(&p->value, len);
 		rev_master = true;
 	}
 
